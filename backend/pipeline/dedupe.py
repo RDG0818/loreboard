@@ -14,7 +14,11 @@ def filter_new(conn, candidates: list[Candidate]) -> list[tuple[Candidate, str]]
     in the images table."""
     result = []
     for candidate in candidates:
-        image_hash = hash_file(candidate.local_path)
-        if not db.hash_exists(conn, image_hash):
-            result.append((candidate, image_hash))
+        try:
+            image_hash = hash_file(candidate.local_path)
+            if not db.hash_exists(conn, image_hash):
+                result.append((candidate, image_hash))
+        except Exception as e:
+            print(f"Dedupe: skipping candidate '{candidate.local_path}': {e}")
+            continue
     return result
