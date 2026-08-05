@@ -42,6 +42,11 @@ INSERT INTO images (
 """
 
 
+def _is_transient(e: Exception) -> bool:
+    """Only retry on transient connection-level errors, not on application errors."""
+    return isinstance(e, psycopg2.OperationalError)
+
+
 def get_connection():
     """Connects to Postgres using DATABASE_URL and registers the pgvector type."""
     conn = psycopg2.connect(os.environ["DATABASE_URL"])
@@ -61,7 +66,7 @@ def hash_exists(conn, image_hash: str) -> bool:
             cur.execute("SELECT 1 FROM images WHERE hash = %s", (image_hash,))
             return cur.fetchone() is not None
 
-    return with_backoff(_query, max_retries=3, base_delay=0.5)
+    return with_backoff(_query, max_retries=3, base_delay=0.5, is_retryable=_is_transient)
 
 
 def insert_image(conn, record: dict) -> None:
@@ -72,4 +77,4 @@ def insert_image(conn, record: dict) -> None:
         with conn.cursor() as cur:
             cur.execute(INSERT_SQL, record)
 
-    with_backoff(_insert, max_retries=3, base_delay=0.5)
+    with_backoff(_insert, max_retries=3, base_delay=0.5, is_retryable=_is_transient)
