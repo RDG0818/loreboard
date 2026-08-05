@@ -26,54 +26,55 @@ def _analysis_to_embedding_text(analysis: AnalysisResult) -> str:
 def run() -> None:
     cfg = config_module.load_config()
     conn = db.get_connection()
-    db.init_schema(conn)
-    r2_client = storage.get_r2_client()
+    try:
+        db.init_schema(conn)
+        r2_client = storage.get_r2_client()
 
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        candidates = []
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            candidates = []
 
-        try:
-            reddit_client = build_reddit_client()
-            candidates += scrape_reddit(cfg, reddit_client, tmp_dir)
-        except Exception as e:
-            print(f"Reddit scrape failed entirely: {e}")
-
-        try:
-            token = get_access_token(os.environ["DEVIANTART_CLIENT_ID"], os.environ["DEVIANTART_CLIENT_SECRET"])
-            candidates += scrape_deviantart(cfg, token, tmp_dir)
-        except Exception as e:
-            print(f"DeviantArt scrape failed entirely: {e}")
-
-        candidates = candidates[: cfg.images_per_run]
-        new_candidates = dedupe.filter_new(conn, candidates)
-
-        clip_model = load_clip_model()
-        analyzer = build_gemini_analyzer(cfg)
-        embedder = build_embedder(cfg)
-
-        for candidate, image_hash in new_candidates:
             try:
-                if not passes_heuristics(candidate.local_path):
-                    continue
-                if not passes_content_gate(clip_model, candidate.local_path, cfg.clip_confidence_threshold):
-                    continue
-
-                analysis = analyzer.analyze_image(candidate.local_path)
-                if not analysis.keep:
-                    continue
-
-                embedding = embedder.embed_text(_analysis_to_embedding_text(analysis))
-                ext = os.path.splitext(candidate.local_path)[1]
-                filename = f"{image_hash}{ext}"
-                persist_image(conn, r2_client, candidate.local_path, image_hash, filename, analysis, embedding)
-            except DailyQuotaExceeded:
-                print("Daily Gemini quota exhausted — stopping run early; already-persisted images are saved.")
-                break
+                reddit_client = build_reddit_client()
+                candidates += scrape_reddit(cfg, reddit_client, tmp_dir)
             except Exception as e:
-                print(f"Skipping {candidate.local_path}: {e}")
-                continue
+                print(f"Reddit scrape failed entirely: {e}")
 
-    conn.close()
+            try:
+                token = get_access_token(os.environ["DEVIANTART_CLIENT_ID"], os.environ["DEVIANTART_CLIENT_SECRET"])
+                candidates += scrape_deviantart(cfg, token, tmp_dir)
+            except Exception as e:
+                print(f"DeviantArt scrape failed entirely: {e}")
+
+            candidates = candidates[: cfg.images_per_run]
+            new_candidates = dedupe.filter_new(conn, candidates)
+
+            clip_model = load_clip_model()
+            analyzer = build_gemini_analyzer(cfg)
+            embedder = build_embedder(cfg)
+
+            for candidate, image_hash in new_candidates:
+                try:
+                    if not passes_heuristics(candidate.local_path):
+                        continue
+                    if not passes_content_gate(clip_model, candidate.local_path, cfg.clip_confidence_threshold):
+                        continue
+
+                    analysis = analyzer.analyze_image(candidate.local_path)
+                    if not analysis.keep:
+                        continue
+
+                    embedding = embedder.embed_text(_analysis_to_embedding_text(analysis))
+                    ext = os.path.splitext(candidate.local_path)[1]
+                    filename = f"{image_hash}{ext}"
+                    persist_image(conn, r2_client, candidate.local_path, image_hash, filename, analysis, embedding)
+                except DailyQuotaExceeded:
+                    print("Daily Gemini quota exhausted — stopping run early; already-persisted images are saved.")
+                    break
+                except Exception as e:
+                    print(f"Skipping {candidate.local_path}: {e}")
+                    continue
+    finally:
+        conn.close()
 
 
 if __name__ == "__main__":
