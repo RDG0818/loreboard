@@ -36,6 +36,13 @@ def _is_transient(e: Exception) -> bool:
     return isinstance(e, requests.exceptions.RequestException)
 
 
+def _get(session, url, **kwargs):
+    """Helper that fetches and raises on HTTP error status inside the retried closure."""
+    response = session.get(url, **kwargs)
+    response.raise_for_status()
+    return response
+
+
 def scrape_deviantart(
     config: PipelineConfig, access_token: str, dest_dir: str, session=requests
 ) -> list[Candidate]:
@@ -45,14 +52,14 @@ def scrape_deviantart(
     for tag in config.deviantart_tags:
         try:
             browse_response = with_backoff(
-                lambda: session.get(
+                lambda: _get(
+                    session,
                     BROWSE_URL,
                     headers=headers,
                     params={"tag": tag, "limit": TAG_LIMIT, "mature_content": "true"},
                 ),
                 is_retryable=_is_transient,
             )
-            browse_response.raise_for_status()
             data = browse_response.json()
 
             for deviation in data.get("results", []):
@@ -64,8 +71,7 @@ def scrape_deviantart(
                     base_name = _safe_filename(deviation["title"], deviation["deviationid"])
                     dest_path = os.path.join(dest_dir, f"{base_name}.jpg")
 
-                    img_response = with_backoff(lambda: session.get(image_url), is_retryable=_is_transient)
-                    img_response.raise_for_status()
+                    img_response = with_backoff(lambda: _get(session, image_url), is_retryable=_is_transient)
                     with open(dest_path, "wb") as f:
                         f.write(img_response.content)
 

@@ -1,6 +1,8 @@
 import os
 from unittest.mock import MagicMock
 
+import requests
+
 from backend.pipeline.config import PipelineConfig
 from backend.pipeline.scrape_deviantart import get_access_token, scrape_deviantart
 
@@ -110,3 +112,30 @@ def test_scrape_deviantart_continues_after_one_image_fails(tmp_path):
 
     assert len(candidates) == 1
     assert candidates[0].source_title == "Good Art"
+
+
+def test_scrape_deviantart_retries_on_429(tmp_path):
+    """Test that HTTP 429 responses trigger backoff-and-retry, not immediate failure."""
+    cfg = PipelineConfig(
+        subreddits=[],
+        deviantart_tags=["fantasyart"],
+        images_per_run=10,
+        clip_confidence_threshold=0.26,
+        gemini_rpm=15,
+        gemini_rpd=1200,
+    )
+
+    rate_limited_response = MagicMock()
+    rate_limited_response.raise_for_status.side_effect = requests.exceptions.HTTPError("429 Too Many Requests")
+
+    browse_response = MagicMock()
+    browse_response.raise_for_status.return_value = None
+    browse_response.json.return_value = {"results": []}
+
+    session = MagicMock()
+    session.get.side_effect = [rate_limited_response, browse_response]
+
+    candidates = scrape_deviantart(cfg, "tok-123", str(tmp_path), session=session)
+
+    assert candidates == []
+    assert session.get.call_count == 2
