@@ -2,6 +2,7 @@ import json
 from unittest.mock import MagicMock
 import pytest
 from PIL import Image
+from google.api_core import exceptions as google_exceptions
 from backend.pipeline.caption_gemini import GeminiAnalyzer
 from backend.pipeline.rate_limit import RateLimiter, DailyQuota, DailyQuotaExceeded
 
@@ -93,3 +94,36 @@ def test_analyze_image_raises_daily_quota_exceeded_without_calling_model(tmp_pat
         analyzer.analyze_image(str(path))
 
     model.generate_content.assert_not_called()
+
+
+def test_analyze_image_retries_on_transient_error_then_succeeds(tmp_path):
+    path = tmp_path / "img.jpg"
+    Image.new("RGB", (10, 10)).save(path)
+
+    model = MagicMock()
+    model.generate_content.side_effect = [
+        google_exceptions.ServiceUnavailable("Service unavailable"),
+        MagicMock(text=_valid_json()),
+    ]
+
+    analyzer = GeminiAnalyzer(model, _no_op_limiter(), DailyQuota(max_calls_per_day=10))
+    result = analyzer.analyze_image(str(path))
+
+    assert result.keep is True
+    assert result.title == "T"
+    assert model.generate_content.call_count == 2
+
+
+def test_analyze_image_propagates_non_transient_error_immediately(tmp_path):
+    path = tmp_path / "img.jpg"
+    Image.new("RGB", (10, 10)).save(path)
+
+    model = MagicMock()
+    model.generate_content.side_effect = google_exceptions.InvalidArgument("Invalid argument")
+
+    analyzer = GeminiAnalyzer(model, _no_op_limiter(), DailyQuota(max_calls_per_day=10))
+
+    with pytest.raises(google_exceptions.InvalidArgument):
+        analyzer.analyze_image(str(path))
+
+    assert model.generate_content.call_count == 1
