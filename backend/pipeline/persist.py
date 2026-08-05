@@ -12,8 +12,10 @@ def persist_image(
     embedding: list[float],
 ) -> None:
     """Uploads the image to R2, then writes its row to Postgres and commits.
-    If the upload raises, no DB row is written — the caller can safely
-    retry this image on the next run without leaving orphaned state."""
+    If the upload raises, no DB row is written. If the DB insert raises,
+    the R2 object is deleted (best-effort) and the exception is re-raised.
+    The caller can safely retry this image on the next run without leaving
+    orphaned uploads or half-written rows."""
     r2_key = f"images/{filename}"
     storage.upload_image(r2_client, local_path, r2_key)
 
@@ -35,5 +37,12 @@ def persist_image(
         "embedding": embedding,
         "r2_key": r2_key,
     }
-    db.insert_image(conn, record)
+    try:
+        db.insert_image(conn, record)
+    except Exception:
+        try:
+            storage.delete_image(r2_client, r2_key)
+        except Exception:
+            pass  # best-effort cleanup; don't mask the original error
+        raise
     conn.commit()

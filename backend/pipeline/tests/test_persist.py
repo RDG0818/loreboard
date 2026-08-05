@@ -48,3 +48,19 @@ def test_persist_image_does_not_commit_if_upload_fails():
             pass
 
     conn.commit.assert_not_called()
+
+
+def test_persist_image_deletes_r2_object_if_insert_fails():
+    conn = MagicMock()
+    r2_client = MagicMock()
+
+    with patch("backend.pipeline.persist.storage.upload_image") as upload_mock, \
+         patch("backend.pipeline.persist.storage.delete_image") as delete_mock, \
+         patch("backend.pipeline.persist.db.insert_image", side_effect=RuntimeError("insert failed")):
+        try:
+            persist_image(conn, r2_client, "/tmp/f.jpg", "hash123", "f.jpg", _analysis(), [0.1, 0.2])
+        except RuntimeError:
+            pass
+
+    delete_mock.assert_called_once_with(r2_client, "images/f.jpg")
+    conn.commit.assert_not_called()

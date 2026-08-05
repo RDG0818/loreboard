@@ -20,3 +20,21 @@ def test_upload_image_uses_explicit_bucket_over_env(monkeypatch):
     storage.upload_image(client, "/tmp/local.jpg", "images/local.jpg", bucket="other-bucket")
 
     client.upload_file.assert_called_once_with("/tmp/local.jpg", "other-bucket", "images/local.jpg")
+
+
+def test_delete_image_calls_delete_object_with_expected_args(monkeypatch):
+    monkeypatch.setenv("R2_BUCKET", "loreboard-assets")
+    client = MagicMock()
+
+    storage.delete_image(client, "images/local.jpg")
+
+    client.delete_object.assert_called_once_with(Bucket="loreboard-assets", Key="images/local.jpg")
+
+
+def test_delete_image_uses_explicit_bucket_over_env(monkeypatch):
+    monkeypatch.setenv("R2_BUCKET", "loreboard-assets")
+    client = MagicMock()
+
+    storage.delete_image(client, "images/local.jpg", bucket="other-bucket")
+
+    client.delete_object.assert_called_once_with(Bucket="other-bucket", Key="images/local.jpg")
