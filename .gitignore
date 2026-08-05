@@ -27,3 +27,4 @@ dist-ssr
 backend/image_dataset
 backend/image_sorter/reference_images
 backend/audio_dataset
+deviantart_token.txt
