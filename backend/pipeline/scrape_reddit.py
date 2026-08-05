@@ -49,19 +49,23 @@ def scrape_reddit(config: PipelineConfig, reddit_client, dest_dir: str) -> list[
                 if submission.stickied:
                     continue
 
-                safe_title = _safe_filename(submission.title)
-                local_path = _download(submission.url, dest_dir, safe_title)
-                if local_path is None:
-                    continue
+                try:
+                    safe_title = _safe_filename(submission.title)
+                    local_path = _download(submission.url, dest_dir, safe_title)
+                    if local_path is None:
+                        continue
 
-                candidates.append(
-                    Candidate(
-                        local_path=local_path,
-                        source="reddit",
-                        source_title=submission.title,
-                        source_url=submission.url,
+                    candidates.append(
+                        Candidate(
+                            local_path=local_path,
+                            source="reddit",
+                            source_title=submission.title,
+                            source_url=submission.url,
+                        )
                     )
-                )
+                except Exception as e:
+                    print(f"Reddit scrape: skipping submission '{submission.title}': {e}")
+                    continue
         except Exception as e:
             print(f"Reddit scrape failed for r/{subreddit_name}: {e}")
             continue

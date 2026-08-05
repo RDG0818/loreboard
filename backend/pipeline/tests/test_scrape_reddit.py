@@ -99,3 +99,47 @@ def test_scrape_reddit_continues_after_one_subreddit_fails(tmp_path, monkeypatch
     candidates = scrape_reddit(cfg, reddit_client, str(tmp_path))
 
     assert len(candidates) == 1
+
+
+def test_scrape_reddit_continues_after_one_image_fails(tmp_path, monkeypatch):
+    cfg = PipelineConfig(
+        subreddits=["ImaginaryBestOf"],
+        deviantart_tags=[],
+        images_per_run=10,
+        clip_confidence_threshold=0.26,
+        gemini_rpm=15,
+        gemini_rpd=1200,
+    )
+
+    # Two submissions in same subreddit
+    bad_submission = _make_submission("Bad Image", "https://example.com/bad.jpg")
+    good_submission = _make_submission("Good Image", "https://example.com/good.jpg")
+
+    subreddit = MagicMock()
+    subreddit.hot.return_value = [bad_submission, good_submission]
+    reddit_client = MagicMock()
+    reddit_client.subreddit.return_value = subreddit
+
+    # Mock requests.get to fail for the first URL and succeed for the second
+    def mock_get(url, headers=None):
+        if "bad" in url:
+            raise RuntimeError("Network timeout downloading image")
+        else:
+            fake_response = MagicMock()
+            fake_response.content = b"good-image-bytes"
+            fake_response.raise_for_status.return_value = None
+            return fake_response
+
+    monkeypatch.setattr(
+        "backend.pipeline.scrape_reddit.requests.get",
+        mock_get,
+    )
+
+    candidates = scrape_reddit(cfg, reddit_client, str(tmp_path))
+
+    # Should have one candidate from the good submission, bad one skipped
+    assert len(candidates) == 1
+    assert candidates[0].source_title == "Good Image"
+    assert os.path.exists(candidates[0].local_path)
+    with open(candidates[0].local_path, "rb") as f:
+        assert f.read() == b"good-image-bytes"
