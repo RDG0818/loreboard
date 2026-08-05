@@ -9,7 +9,7 @@ from backend.pipeline.classify_clip import load_clip_model, passes_content_gate
 from backend.pipeline.classify_heuristics import passes_heuristics
 from backend.pipeline.embed import build_embedder
 from backend.pipeline.persist import persist_image
-from backend.pipeline.rate_limit import DailyQuotaExceeded
+from backend.pipeline.rate_limit import DailyQuota, DailyQuotaExceeded, RateLimiter
 from backend.pipeline.scrape_deviantart import get_access_token, scrape_deviantart
 from backend.pipeline.scrape_reddit import build_reddit_client, scrape_reddit
 
@@ -31,26 +31,36 @@ def run() -> None:
         r2_client = storage.get_r2_client()
 
         with tempfile.TemporaryDirectory() as tmp_dir:
-            candidates = []
+            reddit_candidates: list = []
+            deviantart_candidates: list = []
 
             try:
                 reddit_client = build_reddit_client()
-                candidates += scrape_reddit(cfg, reddit_client, tmp_dir)
+                reddit_candidates = scrape_reddit(cfg, reddit_client, tmp_dir)
             except Exception as e:
                 print(f"Reddit scrape failed entirely: {e}")
 
             try:
                 token = get_access_token(os.environ["DEVIANTART_CLIENT_ID"], os.environ["DEVIANTART_CLIENT_SECRET"])
-                candidates += scrape_deviantart(cfg, token, tmp_dir)
+                deviantart_candidates = scrape_deviantart(cfg, token, tmp_dir)
             except Exception as e:
                 print(f"DeviantArt scrape failed entirely: {e}")
 
-            candidates = candidates[: cfg.images_per_run]
+            # Cap each source independently before combining so a single
+            # over-productive source (typically Reddit) can't crowd the other
+            # one out entirely once the combined list is truncated.
+            per_source_cap = cfg.images_per_run // 2
+            candidates = reddit_candidates[:per_source_cap] + deviantart_candidates[:per_source_cap]
             new_candidates = dedupe.filter_new(conn, candidates)
 
             clip_model = load_clip_model()
-            analyzer = build_gemini_analyzer(cfg)
-            embedder = build_embedder(cfg)
+            # A single shared RateLimiter/DailyQuota, since the design budget
+            # (gemini_rpm/gemini_rpd) is one ceiling covering both caption
+            # and embed calls to the Gemini API — not a separate budget each.
+            gemini_rate_limiter = RateLimiter(calls_per_minute=cfg.gemini_rpm)
+            gemini_daily_quota = DailyQuota(max_calls_per_day=cfg.gemini_rpd)
+            analyzer = build_gemini_analyzer(cfg, gemini_rate_limiter, gemini_daily_quota)
+            embedder = build_embedder(cfg, gemini_rate_limiter, gemini_daily_quota)
 
             for candidate, image_hash in new_candidates:
                 try:

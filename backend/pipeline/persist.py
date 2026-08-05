@@ -40,6 +40,7 @@ def persist_image(
     try:
         db.insert_image(conn, record)
     except Exception:
+        conn.rollback()  # clear the aborted transaction so the connection is usable again
         try:
             storage.delete_image(r2_client, r2_key)
         except Exception:

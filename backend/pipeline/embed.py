@@ -35,8 +35,20 @@ class Embedder:
         return result["embedding"]
 
 
-def build_embedder(config: PipelineConfig) -> Embedder:
+def build_embedder(
+    config: PipelineConfig,
+    rate_limiter: RateLimiter | None = None,
+    daily_quota: DailyQuota | None = None,
+) -> Embedder:
+    """Builds an Embedder. If rate_limiter/daily_quota are not supplied,
+    builds standalone ones from config — but callers that also build a
+    GeminiAnalyzer should construct one shared RateLimiter/DailyQuota and
+    pass them into both builders, since the design budget (gemini_rpm/
+    gemini_rpd) is a single ceiling shared across caption and embed calls,
+    not one per call site."""
     genai.configure(api_key=os.environ["GOOGLE_API_KEY"])
-    rate_limiter = RateLimiter(calls_per_minute=config.gemini_rpm)
-    daily_quota = DailyQuota(max_calls_per_day=config.gemini_rpd)
+    if rate_limiter is None:
+        rate_limiter = RateLimiter(calls_per_minute=config.gemini_rpm)
+    if daily_quota is None:
+        daily_quota = DailyQuota(max_calls_per_day=config.gemini_rpd)
     return Embedder(genai.embed_content, rate_limiter, daily_quota)

@@ -4,8 +4,9 @@ from backend.pipeline.config import PipelineConfig
 from backend.pipeline.scrape_reddit import scrape_reddit
 
 
-def _make_submission(title, url, stickied=False):
+def _make_submission(title, url, stickied=False, submission_id="abc123"):
     sub = MagicMock()
+    sub.id = submission_id
     sub.title = title
     sub.url = url
     sub.stickied = stickied
@@ -143,3 +144,44 @@ def test_scrape_reddit_continues_after_one_image_fails(tmp_path, monkeypatch):
     assert os.path.exists(candidates[0].local_path)
     with open(candidates[0].local_path, "rb") as f:
         assert f.read() == b"good-image-bytes"
+
+
+def test_scrape_reddit_same_titled_submissions_get_distinct_filenames(tmp_path, monkeypatch):
+    """Two submissions with the same (or same-after-truncation) title must not
+    overwrite each other's downloaded file — the submission id disambiguates
+    the filename."""
+    cfg = PipelineConfig(
+        subreddits=["ImaginaryBestOf"],
+        deviantart_tags=[],
+        images_per_run=10,
+        clip_confidence_threshold=0.26,
+        gemini_rpm=15,
+        gemini_rpd=1200,
+    )
+
+    submission1 = _make_submission("Same Title", "https://example.com/one.jpg", submission_id="id1")
+    submission2 = _make_submission("Same Title", "https://example.com/two.jpg", submission_id="id2")
+    subreddit = MagicMock()
+    subreddit.hot.return_value = [submission1, submission2]
+    reddit_client = MagicMock()
+    reddit_client.subreddit.return_value = subreddit
+
+    def mock_get(url, headers=None):
+        fake_response = MagicMock()
+        fake_response.content = b"bytes-for-" + url.encode()
+        fake_response.raise_for_status.return_value = None
+        return fake_response
+
+    monkeypatch.setattr("backend.pipeline.scrape_reddit.requests.get", mock_get)
+
+    candidates = scrape_reddit(cfg, reddit_client, str(tmp_path))
+
+    assert len(candidates) == 2
+    paths = {c.local_path for c in candidates}
+    assert len(paths) == 2  # distinct filenames — neither download overwrote the other
+    assert "id1" in candidates[0].local_path
+    assert "id2" in candidates[1].local_path
+    with open(candidates[0].local_path, "rb") as f:
+        assert f.read() == b"bytes-for-https://example.com/one.jpg"
+    with open(candidates[1].local_path, "rb") as f:
+        assert f.read() == b"bytes-for-https://example.com/two.jpg"

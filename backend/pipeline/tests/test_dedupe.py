@@ -85,3 +85,26 @@ def test_filter_new_skips_db_failures(tmp_path, capsys):
     assert result[0][0].local_path == str(f2)
     captured = capsys.readouterr()
     assert "Dedupe: skipping candidate" in captured.out
+
+
+def test_filter_new_dedupes_identical_candidates_within_same_run(tmp_path):
+    """Two candidates with identical content (e.g. Reddit crossposts) should
+    only yield one (candidate, hash) pair — the second must be filtered even
+    though neither hash exists in the DB yet."""
+    f1 = tmp_path / "crosspost1.jpg"
+    f1.write_bytes(b"identical-content")
+    f2 = tmp_path / "crosspost2.jpg"
+    f2.write_bytes(b"identical-content")
+
+    candidates = [
+        Candidate(local_path=str(f1), source="reddit", source_title="c1", source_url="u1"),
+        Candidate(local_path=str(f2), source="reddit", source_title="c2", source_url="u2"),
+    ]
+
+    conn = MagicMock()
+
+    with patch("backend.pipeline.dedupe.db.hash_exists", return_value=False):
+        result = dedupe.filter_new(conn, candidates)
+
+    assert len(result) == 1
+    assert result[0][0].local_path == str(f1)

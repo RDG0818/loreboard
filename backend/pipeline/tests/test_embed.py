@@ -1,8 +1,9 @@
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 import pytest
 from google.api_core import exceptions as google_exceptions
 
-from backend.pipeline.embed import Embedder
+from backend.pipeline.config import PipelineConfig
+from backend.pipeline.embed import Embedder, build_embedder
 from backend.pipeline.rate_limit import RateLimiter, DailyQuota, DailyQuotaExceeded
 
 
@@ -57,3 +58,39 @@ def test_embed_text_does_not_retry_on_non_transient_error():
         embedder.embed_text("some text")
 
     assert embed_fn.call_count == 1
+
+
+def _config():
+    return PipelineConfig(
+        subreddits=[],
+        deviantart_tags=[],
+        images_per_run=10,
+        clip_confidence_threshold=0.26,
+        gemini_rpm=15,
+        gemini_rpd=1200,
+    )
+
+
+def test_build_embedder_uses_externally_supplied_rate_limiter_and_quota(monkeypatch):
+    """When a shared rate_limiter/daily_quota are passed in (e.g. so caption
+    and embed calls draw from one combined budget), the builder must use
+    those instances rather than constructing its own."""
+    monkeypatch.setenv("GOOGLE_API_KEY", "fake-key")
+    shared_limiter = RateLimiter(calls_per_minute=6000, sleep=lambda s: None)
+    shared_quota = DailyQuota(max_calls_per_day=10)
+
+    with patch("backend.pipeline.embed.genai"):
+        embedder = build_embedder(_config(), shared_limiter, shared_quota)
+
+    assert embedder._rate_limiter is shared_limiter
+    assert embedder._daily_quota is shared_quota
+
+
+def test_build_embedder_builds_own_rate_limiter_and_quota_when_not_supplied(monkeypatch):
+    monkeypatch.setenv("GOOGLE_API_KEY", "fake-key")
+
+    with patch("backend.pipeline.embed.genai"):
+        embedder = build_embedder(_config())
+
+    assert isinstance(embedder._rate_limiter, RateLimiter)
+    assert isinstance(embedder._daily_quota, DailyQuota)

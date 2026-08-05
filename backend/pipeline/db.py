@@ -5,9 +5,9 @@ from pgvector.psycopg2 import register_vector
 
 from backend.pipeline.rate_limit import with_backoff
 
-SCHEMA_SQL = """
-CREATE EXTENSION IF NOT EXISTS vector;
+CREATE_EXTENSION_SQL = "CREATE EXTENSION IF NOT EXISTS vector;"
 
+SCHEMA_SQL = """
 CREATE TABLE IF NOT EXISTS images (
     hash TEXT PRIMARY KEY,
     filename TEXT NOT NULL,
@@ -39,6 +39,7 @@ INSERT INTO images (
     %(dominant_colors)s, %(detail_score)s, %(mood_score)s, %(scale_score)s,
     %(magic_score)s, %(embedding)s, %(r2_key)s
 )
+ON CONFLICT (hash) DO NOTHING
 """
 
 
@@ -48,8 +49,15 @@ def _is_transient(e: Exception) -> bool:
 
 
 def get_connection():
-    """Connects to Postgres using DATABASE_URL and registers the pgvector type."""
+    """Connects to Postgres using DATABASE_URL. Ensures the `vector` extension
+    exists before calling register_vector — register_vector looks up the
+    `vector` type's OID, which fails on a completely fresh database where the
+    extension hasn't been created yet (init_schema normally creates it, but
+    that runs after get_connection, so the bootstrap step must happen here)."""
     conn = psycopg2.connect(os.environ["DATABASE_URL"])
+    with conn.cursor() as cur:
+        cur.execute(CREATE_EXTENSION_SQL)
+    conn.commit()
     register_vector(conn)
     return conn
 

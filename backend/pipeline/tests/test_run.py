@@ -58,11 +58,11 @@ def test_run_stops_early_on_daily_quota_but_keeps_already_persisted(tmp_path, mo
 
     analyzer = MagicMock()
     analyzer.analyze_image.side_effect = [_analysis(), DailyQuotaExceeded("quota gone")]
-    monkeypatch.setattr("backend.pipeline.run.build_gemini_analyzer", lambda cfg: analyzer)
+    monkeypatch.setattr("backend.pipeline.run.build_gemini_analyzer", lambda cfg, *a, **k: analyzer)
 
     embedder = MagicMock()
     embedder.embed_text.return_value = [0.1, 0.2]
-    monkeypatch.setattr("backend.pipeline.run.build_embedder", lambda cfg: embedder)
+    monkeypatch.setattr("backend.pipeline.run.build_embedder", lambda cfg, *a, **k: embedder)
 
     monkeypatch.setenv("DEVIANTART_CLIENT_ID", "cid")
     monkeypatch.setenv("DEVIANTART_CLIENT_SECRET", "csecret")
@@ -104,8 +104,8 @@ def test_run_truncates_combined_candidates_to_images_per_run(tmp_path, monkeypat
 
     monkeypatch.setattr("backend.pipeline.run.dedupe.filter_new", fake_filter_new)
     monkeypatch.setattr("backend.pipeline.run.load_clip_model", lambda: MagicMock())
-    monkeypatch.setattr("backend.pipeline.run.build_gemini_analyzer", lambda cfg: MagicMock())
-    monkeypatch.setattr("backend.pipeline.run.build_embedder", lambda cfg: MagicMock())
+    monkeypatch.setattr("backend.pipeline.run.build_gemini_analyzer", lambda cfg, *a, **k: MagicMock())
+    monkeypatch.setattr("backend.pipeline.run.build_embedder", lambda cfg, *a, **k: MagicMock())
 
     monkeypatch.setenv("DEVIANTART_CLIENT_ID", "cid")
     monkeypatch.setenv("DEVIANTART_CLIENT_SECRET", "csecret")
@@ -146,11 +146,11 @@ def test_run_skips_candidate_on_generic_exception_and_continues(tmp_path, monkey
 
     analyzer = MagicMock()
     analyzer.analyze_image.side_effect = [RuntimeError("boom"), _analysis()]
-    monkeypatch.setattr("backend.pipeline.run.build_gemini_analyzer", lambda cfg: analyzer)
+    monkeypatch.setattr("backend.pipeline.run.build_gemini_analyzer", lambda cfg, *a, **k: analyzer)
 
     embedder = MagicMock()
     embedder.embed_text.return_value = [0.1, 0.2]
-    monkeypatch.setattr("backend.pipeline.run.build_embedder", lambda cfg: embedder)
+    monkeypatch.setattr("backend.pipeline.run.build_embedder", lambda cfg, *a, **k: embedder)
 
     monkeypatch.setenv("DEVIANTART_CLIENT_ID", "cid")
     monkeypatch.setenv("DEVIANTART_CLIENT_SECRET", "csecret")
@@ -200,11 +200,11 @@ def test_run_processes_other_source_when_one_source_scrape_fails(tmp_path, monke
 
     analyzer = MagicMock()
     analyzer.analyze_image.return_value = _analysis()
-    monkeypatch.setattr("backend.pipeline.run.build_gemini_analyzer", lambda cfg: analyzer)
+    monkeypatch.setattr("backend.pipeline.run.build_gemini_analyzer", lambda cfg, *a, **k: analyzer)
 
     embedder = MagicMock()
     embedder.embed_text.return_value = [0.1, 0.2]
-    monkeypatch.setattr("backend.pipeline.run.build_embedder", lambda cfg: embedder)
+    monkeypatch.setattr("backend.pipeline.run.build_embedder", lambda cfg, *a, **k: embedder)
 
     monkeypatch.setenv("DEVIANTART_CLIENT_ID", "cid")
     monkeypatch.setenv("DEVIANTART_CLIENT_SECRET", "csecret")
@@ -215,3 +215,63 @@ def test_run_processes_other_source_when_one_source_scrape_fails(tmp_path, monke
     # but the DeviantArt candidate was still processed and persisted.
     assert reddit_scrape_called == []
     assert len(persisted) == 1
+
+
+def test_run_shares_one_rate_limiter_and_daily_quota_between_analyzer_and_embedder(tmp_path, monkeypatch):
+    """The design budget (gemini_rpm/gemini_rpd) is one ceiling shared across
+    Gemini caption and embed calls — run() must construct a single
+    RateLimiter/DailyQuota pair and pass the *same* instances into both
+    build_gemini_analyzer and build_embedder, not build one pair per call."""
+    from backend.pipeline.types import Candidate
+
+    candidate = Candidate(local_path=str(tmp_path / "a.jpg"), source="reddit", source_title="a", source_url="u1")
+    with open(candidate.local_path, "wb") as f:
+        f.write(b"fake-bytes")
+
+    monkeypatch.setattr("backend.pipeline.run.config_module.load_config", lambda: MagicMock(images_per_run=10, gemini_rpm=15, gemini_rpd=1200))
+    monkeypatch.setattr("backend.pipeline.run.db.get_connection", lambda: MagicMock())
+    monkeypatch.setattr("backend.pipeline.run.db.init_schema", lambda conn: None)
+    monkeypatch.setattr("backend.pipeline.run.storage.get_r2_client", lambda: MagicMock())
+    monkeypatch.setattr("backend.pipeline.run.build_reddit_client", lambda: MagicMock())
+    monkeypatch.setattr("backend.pipeline.run.scrape_reddit", lambda cfg, client, dest: [candidate])
+    monkeypatch.setattr("backend.pipeline.run.get_access_token", lambda cid, secret: "tok")
+    monkeypatch.setattr("backend.pipeline.run.scrape_deviantart", lambda cfg, token, dest: [])
+    monkeypatch.setattr(
+        "backend.pipeline.run.dedupe.filter_new",
+        lambda conn, cands: [(c, f"hash-{i}") for i, c in enumerate(cands)],
+    )
+    monkeypatch.setattr("backend.pipeline.run.load_clip_model", lambda: MagicMock())
+    monkeypatch.setattr("backend.pipeline.run.passes_heuristics", lambda path: True)
+    monkeypatch.setattr("backend.pipeline.run.passes_content_gate", lambda model, path, threshold: True)
+    monkeypatch.setattr("backend.pipeline.run.persist_image", lambda *a, **k: None)
+
+    analyzer_calls = []
+    embedder_calls = []
+
+    def fake_build_analyzer(cfg, rate_limiter=None, daily_quota=None):
+        analyzer_calls.append((rate_limiter, daily_quota))
+        analyzer = MagicMock()
+        analyzer.analyze_image.return_value = _analysis()
+        return analyzer
+
+    def fake_build_embedder(cfg, rate_limiter=None, daily_quota=None):
+        embedder_calls.append((rate_limiter, daily_quota))
+        embedder = MagicMock()
+        embedder.embed_text.return_value = [0.1, 0.2]
+        return embedder
+
+    monkeypatch.setattr("backend.pipeline.run.build_gemini_analyzer", fake_build_analyzer)
+    monkeypatch.setattr("backend.pipeline.run.build_embedder", fake_build_embedder)
+
+    monkeypatch.setenv("DEVIANTART_CLIENT_ID", "cid")
+    monkeypatch.setenv("DEVIANTART_CLIENT_SECRET", "csecret")
+
+    run()
+
+    assert len(analyzer_calls) == 1
+    assert len(embedder_calls) == 1
+    analyzer_limiter, analyzer_quota = analyzer_calls[0]
+    embedder_limiter, embedder_quota = embedder_calls[0]
+    assert analyzer_limiter is not None and analyzer_quota is not None
+    assert analyzer_limiter is embedder_limiter
+    assert analyzer_quota is embedder_quota

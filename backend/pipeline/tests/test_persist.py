@@ -64,3 +64,23 @@ def test_persist_image_deletes_r2_object_if_insert_fails():
 
     delete_mock.assert_called_once_with(r2_client, "images/f.jpg")
     conn.commit.assert_not_called()
+
+
+def test_persist_image_rolls_back_transaction_if_insert_fails():
+    conn = MagicMock()
+    r2_client = MagicMock()
+    calls = []
+    conn.rollback.side_effect = lambda: calls.append("rollback")
+
+    with patch("backend.pipeline.persist.storage.upload_image"), \
+         patch("backend.pipeline.persist.storage.delete_image", side_effect=lambda *a, **k: calls.append("delete")), \
+         patch("backend.pipeline.persist.db.insert_image", side_effect=RuntimeError("insert failed")):
+        try:
+            persist_image(conn, r2_client, "/tmp/f.jpg", "hash123", "f.jpg", _analysis(), [0.1, 0.2])
+        except RuntimeError:
+            pass
+
+    conn.rollback.assert_called_once()
+    conn.commit.assert_not_called()
+    # rollback must happen before the R2 cleanup attempt
+    assert calls == ["rollback", "delete"]

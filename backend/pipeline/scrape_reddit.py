@@ -23,8 +23,9 @@ def build_reddit_client() -> praw.Reddit:
     )
 
 
-def _safe_filename(title: str) -> str:
-    return "".join(c for c in title if c.isalpha() or c.isdigit() or c.isspace()).rstrip()[:80]
+def _safe_filename(title: str, submission_id: str) -> str:
+    safe_title = "".join(c for c in title if c.isalpha() or c.isdigit() or c.isspace()).rstrip()[:80]
+    return f"{safe_title}_{submission_id}"
 
 
 def _download(url: str, dest_dir: str, base_name: str) -> str | None:
@@ -50,7 +51,7 @@ def scrape_reddit(config: PipelineConfig, reddit_client, dest_dir: str) -> list[
                     continue
 
                 try:
-                    safe_title = _safe_filename(submission.title)
+                    safe_title = _safe_filename(submission.title, submission.id)
                     local_path = _download(submission.url, dest_dir, safe_title)
                     if local_path is None:
                         continue

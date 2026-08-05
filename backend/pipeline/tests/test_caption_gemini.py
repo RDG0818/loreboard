@@ -1,9 +1,10 @@
 import json
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 import pytest
 from PIL import Image
 from google.api_core import exceptions as google_exceptions
-from backend.pipeline.caption_gemini import GeminiAnalyzer
+from backend.pipeline.caption_gemini import GeminiAnalyzer, build_gemini_analyzer
+from backend.pipeline.config import PipelineConfig
 from backend.pipeline.rate_limit import RateLimiter, DailyQuota, DailyQuotaExceeded
 
 
@@ -127,3 +128,39 @@ def test_analyze_image_propagates_non_transient_error_immediately(tmp_path):
         analyzer.analyze_image(str(path))
 
     assert model.generate_content.call_count == 1
+
+
+def _config():
+    return PipelineConfig(
+        subreddits=[],
+        deviantart_tags=[],
+        images_per_run=10,
+        clip_confidence_threshold=0.26,
+        gemini_rpm=15,
+        gemini_rpd=1200,
+    )
+
+
+def test_build_gemini_analyzer_uses_externally_supplied_rate_limiter_and_quota(monkeypatch):
+    """When a shared rate_limiter/daily_quota are passed in (e.g. so caption
+    and embed calls draw from one combined budget), the builder must use
+    those instances rather than constructing its own."""
+    monkeypatch.setenv("GOOGLE_API_KEY", "fake-key")
+    shared_limiter = RateLimiter(calls_per_minute=6000, sleep=lambda s: None)
+    shared_quota = DailyQuota(max_calls_per_day=10)
+
+    with patch("backend.pipeline.caption_gemini.genai"):
+        analyzer = build_gemini_analyzer(_config(), shared_limiter, shared_quota)
+
+    assert analyzer._rate_limiter is shared_limiter
+    assert analyzer._daily_quota is shared_quota
+
+
+def test_build_gemini_analyzer_builds_own_rate_limiter_and_quota_when_not_supplied(monkeypatch):
+    monkeypatch.setenv("GOOGLE_API_KEY", "fake-key")
+
+    with patch("backend.pipeline.caption_gemini.genai"):
+        analyzer = build_gemini_analyzer(_config())
+
+    assert isinstance(analyzer._rate_limiter, RateLimiter)
+    assert isinstance(analyzer._daily_quota, DailyQuota)
