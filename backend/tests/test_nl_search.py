@@ -23,7 +23,7 @@ def test_resolve_search_query_parses_valid_translation():
 
 def test_resolve_search_query_falls_back_on_invalid_translation():
     model = MagicMock()
-    model.generate_content.return_value.text = "not a valid query!!"
+    model.generate_content.return_value.text = "xyz:bad"  # unrecognized prefix, triggers QueryParseError
 
     sql, params = resolve_search_query("something weird", model=model)
 
@@ -39,3 +39,15 @@ def test_resolve_search_query_falls_back_when_model_call_raises():
 
     assert sql == "(name ILIKE %s OR oracle_text ILIKE %s)"
     assert params == ["%anything%", "%anything%"]
+
+
+def test_resolve_search_query_parses_multi_word_bare_name_translation():
+    """Regression test: multi-word card names (bare tokens with no special syntax)
+    should parse correctly, not fall back."""
+    model = MagicMock()
+    model.generate_content.return_value.text = "Lightning Bolt"
+
+    sql, params = resolve_search_query("find me lightning bolt", model=model)
+
+    assert sql == "name ILIKE %s AND name ILIKE %s"
+    assert params == ["%Lightning%", "%Bolt%"]

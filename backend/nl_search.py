@@ -39,14 +39,6 @@ def resolve_search_query(text: str, model=None) -> tuple[str, list]:
     should degrade to a basic search, never a hard error."""
     try:
         translated = translate_natural_language_query(text, model=model)
-        tokens = translated.strip().split()
-
-        # If translation contains multiple bare tokens with no special syntax,
-        # it's probably gibberish from the LLM — treat as invalid
-        has_special_syntax = any(":" in token or token.startswith("cmc") for token in tokens)
-        if len(tokens) > 1 and not has_special_syntax:
-            raise QueryParseError("Invalid translation: multiple bare tokens with no special syntax")
-
         return parse_query(translated)
     except Exception:
         return "(name ILIKE %s OR oracle_text ILIKE %s)", [f"%{text}%", f"%{text}%"]
