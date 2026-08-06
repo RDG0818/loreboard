@@ -10,8 +10,8 @@ from backend.pipeline.classify_heuristics import passes_heuristics
 from backend.pipeline.embed import build_embedder
 from backend.pipeline.persist import persist_image
 from backend.pipeline.rate_limit import DailyQuota, DailyQuotaExceeded, RateLimiter
+from backend.pipeline.scrape_artstation import scrape_artstation
 from backend.pipeline.scrape_deviantart import get_access_token, scrape_deviantart
-from backend.pipeline.scrape_reddit import build_reddit_client, scrape_reddit
 
 
 def _analysis_to_embedding_text(analysis: AnalysisResult) -> str:
@@ -31,14 +31,13 @@ def run() -> None:
         r2_client = storage.get_r2_client()
 
         with tempfile.TemporaryDirectory() as tmp_dir:
-            reddit_candidates: list = []
+            artstation_candidates: list = []
             deviantart_candidates: list = []
 
             try:
-                reddit_client = build_reddit_client()
-                reddit_candidates = scrape_reddit(cfg, reddit_client, tmp_dir)
+                artstation_candidates = scrape_artstation(cfg, tmp_dir)
             except Exception as e:
-                print(f"Reddit scrape failed entirely: {e}")
+                print(f"ArtStation scrape failed entirely: {e}")
 
             try:
                 token = get_access_token(os.environ["DEVIANTART_CLIENT_ID"], os.environ["DEVIANTART_CLIENT_SECRET"])
@@ -47,10 +46,10 @@ def run() -> None:
                 print(f"DeviantArt scrape failed entirely: {e}")
 
             # Cap each source independently before combining so a single
-            # over-productive source (typically Reddit) can't crowd the other
-            # one out entirely once the combined list is truncated.
+            # over-productive source can't crowd the other one out entirely
+            # once the combined list is truncated.
             per_source_cap = cfg.images_per_run // 2
-            candidates = reddit_candidates[:per_source_cap] + deviantart_candidates[:per_source_cap]
+            candidates = artstation_candidates[:per_source_cap] + deviantart_candidates[:per_source_cap]
             new_candidates = dedupe.filter_new(conn, candidates)
 
             clip_model = load_clip_model()

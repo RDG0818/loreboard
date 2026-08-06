@@ -132,7 +132,7 @@ def test_analyze_image_propagates_non_transient_error_immediately(tmp_path):
 
 def _config():
     return PipelineConfig(
-        subreddits=[],
+        artstation_queries=[],
         deviantart_tags=[],
         images_per_run=10,
         clip_confidence_threshold=0.26,

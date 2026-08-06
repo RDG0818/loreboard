@@ -25,7 +25,7 @@ def test_get_access_token_uses_client_credentials_grant():
 
 def test_scrape_deviantart_downloads_results_per_tag(tmp_path):
     cfg = PipelineConfig(
-        subreddits=[],
+        artstation_queries=[],
         deviantart_tags=["fantasyart"],
         images_per_run=10,
         clip_confidence_threshold=0.26,
@@ -62,7 +62,7 @@ def test_scrape_deviantart_downloads_results_per_tag(tmp_path):
 def test_scrape_deviantart_preserves_real_extension(tmp_path):
     """PNG sources must be saved as .png, not silently forced to .jpg."""
     cfg = PipelineConfig(
-        subreddits=[],
+        artstation_queries=[],
         deviantart_tags=["fantasyart"],
         images_per_run=10,
         clip_confidence_threshold=0.26,
@@ -98,7 +98,7 @@ def test_scrape_deviantart_preserves_real_extension(tmp_path):
 
 def test_scrape_deviantart_falls_back_to_jpg_for_unrecognized_extension(tmp_path):
     cfg = PipelineConfig(
-        subreddits=[],
+        artstation_queries=[],
         deviantart_tags=["fantasyart"],
         images_per_run=10,
         clip_confidence_threshold=0.26,
@@ -133,7 +133,7 @@ def test_scrape_deviantart_falls_back_to_jpg_for_unrecognized_extension(tmp_path
 
 def test_scrape_deviantart_continues_after_one_tag_fails(tmp_path):
     cfg = PipelineConfig(
-        subreddits=[],
+        artstation_queries=[],
         deviantart_tags=["broken", "fantasyart"],
         images_per_run=10,
         clip_confidence_threshold=0.26,
@@ -156,7 +156,7 @@ def test_scrape_deviantart_continues_after_one_tag_fails(tmp_path):
 
 def test_scrape_deviantart_continues_after_one_image_fails(tmp_path):
     cfg = PipelineConfig(
-        subreddits=[],
+        artstation_queries=[],
         deviantart_tags=["fantasyart"],
         images_per_run=10,
         clip_confidence_threshold=0.26,
@@ -189,7 +189,7 @@ def test_scrape_deviantart_continues_after_one_image_fails(tmp_path):
 def test_scrape_deviantart_retries_on_429(tmp_path):
     """Test that HTTP 429 responses trigger backoff-and-retry, not immediate failure."""
     cfg = PipelineConfig(
-        subreddits=[],
+        artstation_queries=[],
         deviantart_tags=["fantasyart"],
         images_per_run=10,
         clip_confidence_threshold=0.26,

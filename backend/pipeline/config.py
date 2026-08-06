@@ -4,7 +4,7 @@ import os
 
 @dataclasses.dataclass
 class PipelineConfig:
-    subreddits: list[str]
+    artstation_queries: list[str]
     deviantart_tags: list[str]
     images_per_run: int
     clip_confidence_threshold: float
@@ -13,13 +13,7 @@ class PipelineConfig:
 
 
 DEFAULT_CONFIG = PipelineConfig(
-    subreddits=[
-        "ImaginaryBestOf",
-        "ImaginaryLandscapes",
-        "ImaginaryWarhammer",
-        "ImaginaryMonsters",
-        "ImaginaryCharacters",
-    ],
+    artstation_queries=["fantasy art", "concept art", "digital painting"],
     deviantart_tags=["fantasyart", "digitalpainting", "conceptart"],
     images_per_run=200,
     clip_confidence_threshold=0.26,

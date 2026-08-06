@@ -7,7 +7,7 @@ def test_load_config_returns_defaults(monkeypatch):
     cfg = load_config()
     assert isinstance(cfg, PipelineConfig)
     assert cfg.images_per_run == 200
-    assert "ImaginaryBestOf" in cfg.subreddits
+    assert "fantasy art" in cfg.artstation_queries
     assert cfg.gemini_rpm == 15
     assert cfg.gemini_rpd == 1200
 

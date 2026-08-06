@@ -34,8 +34,8 @@ def test_analysis_to_embedding_text_includes_key_fields():
 def test_run_stops_early_on_daily_quota_but_keeps_already_persisted(tmp_path, monkeypatch):
     from backend.pipeline.types import Candidate
 
-    candidate1 = Candidate(local_path=str(tmp_path / "a.jpg"), source="reddit", source_title="a", source_url="u1")
-    candidate2 = Candidate(local_path=str(tmp_path / "b.jpg"), source="reddit", source_title="b", source_url="u2")
+    candidate1 = Candidate(local_path=str(tmp_path / "a.jpg"), source="artstation", source_title="a", source_url="u1")
+    candidate2 = Candidate(local_path=str(tmp_path / "b.jpg"), source="artstation", source_title="b", source_url="u2")
     for c in (candidate1, candidate2):
         with open(c.local_path, "wb") as f:
             f.write(b"fake-bytes")
@@ -44,8 +44,7 @@ def test_run_stops_early_on_daily_quota_but_keeps_already_persisted(tmp_path, mo
     monkeypatch.setattr("backend.pipeline.run.db.get_connection", lambda: MagicMock())
     monkeypatch.setattr("backend.pipeline.run.db.init_schema", lambda conn: None)
     monkeypatch.setattr("backend.pipeline.run.storage.get_r2_client", lambda: MagicMock())
-    monkeypatch.setattr("backend.pipeline.run.build_reddit_client", lambda: MagicMock())
-    monkeypatch.setattr("backend.pipeline.run.scrape_reddit", lambda cfg, client, dest: [candidate1, candidate2])
+    monkeypatch.setattr("backend.pipeline.run.scrape_artstation", lambda cfg, dest: [candidate1, candidate2])
     monkeypatch.setattr("backend.pipeline.run.get_access_token", lambda cid, secret: "tok")
     monkeypatch.setattr("backend.pipeline.run.scrape_deviantart", lambda cfg, token, dest: [])
     monkeypatch.setattr("backend.pipeline.run.dedupe.filter_new", lambda conn, cands: [(c, f"hash-{i}") for i, c in enumerate(cands)])
@@ -75,15 +74,15 @@ def test_run_stops_early_on_daily_quota_but_keeps_already_persisted(tmp_path, mo
 def test_run_truncates_combined_candidates_to_images_per_run(tmp_path, monkeypatch):
     from backend.pipeline.types import Candidate
 
-    reddit_candidates = [
-        Candidate(local_path=str(tmp_path / f"r{i}.jpg"), source="reddit", source_title=f"r{i}", source_url=f"ru{i}")
+    artstation_candidates = [
+        Candidate(local_path=str(tmp_path / f"r{i}.jpg"), source="artstation", source_title=f"r{i}", source_url=f"ru{i}")
         for i in range(3)
     ]
     deviantart_candidates = [
         Candidate(local_path=str(tmp_path / f"d{i}.jpg"), source="deviantart", source_title=f"d{i}", source_url=f"du{i}")
         for i in range(3)
     ]
-    for c in reddit_candidates + deviantart_candidates:
+    for c in artstation_candidates + deviantart_candidates:
         with open(c.local_path, "wb") as f:
             f.write(b"fake-bytes")
 
@@ -91,8 +90,7 @@ def test_run_truncates_combined_candidates_to_images_per_run(tmp_path, monkeypat
     monkeypatch.setattr("backend.pipeline.run.db.get_connection", lambda: MagicMock())
     monkeypatch.setattr("backend.pipeline.run.db.init_schema", lambda conn: None)
     monkeypatch.setattr("backend.pipeline.run.storage.get_r2_client", lambda: MagicMock())
-    monkeypatch.setattr("backend.pipeline.run.build_reddit_client", lambda: MagicMock())
-    monkeypatch.setattr("backend.pipeline.run.scrape_reddit", lambda cfg, client, dest: reddit_candidates)
+    monkeypatch.setattr("backend.pipeline.run.scrape_artstation", lambda cfg, dest: artstation_candidates)
     monkeypatch.setattr("backend.pipeline.run.get_access_token", lambda cid, secret: "tok")
     monkeypatch.setattr("backend.pipeline.run.scrape_deviantart", lambda cfg, token, dest: deviantart_candidates)
 
@@ -119,8 +117,8 @@ def test_run_truncates_combined_candidates_to_images_per_run(tmp_path, monkeypat
 def test_run_skips_candidate_on_generic_exception_and_continues(tmp_path, monkeypatch):
     from backend.pipeline.types import Candidate
 
-    candidate1 = Candidate(local_path=str(tmp_path / "a.jpg"), source="reddit", source_title="a", source_url="u1")
-    candidate2 = Candidate(local_path=str(tmp_path / "b.jpg"), source="reddit", source_title="b", source_url="u2")
+    candidate1 = Candidate(local_path=str(tmp_path / "a.jpg"), source="artstation", source_title="a", source_url="u1")
+    candidate2 = Candidate(local_path=str(tmp_path / "b.jpg"), source="artstation", source_title="b", source_url="u2")
     for c in (candidate1, candidate2):
         with open(c.local_path, "wb") as f:
             f.write(b"fake-bytes")
@@ -129,8 +127,7 @@ def test_run_skips_candidate_on_generic_exception_and_continues(tmp_path, monkey
     monkeypatch.setattr("backend.pipeline.run.db.get_connection", lambda: MagicMock())
     monkeypatch.setattr("backend.pipeline.run.db.init_schema", lambda conn: None)
     monkeypatch.setattr("backend.pipeline.run.storage.get_r2_client", lambda: MagicMock())
-    monkeypatch.setattr("backend.pipeline.run.build_reddit_client", lambda: MagicMock())
-    monkeypatch.setattr("backend.pipeline.run.scrape_reddit", lambda cfg, client, dest: [candidate1, candidate2])
+    monkeypatch.setattr("backend.pipeline.run.scrape_artstation", lambda cfg, dest: [candidate1, candidate2])
     monkeypatch.setattr("backend.pipeline.run.get_access_token", lambda cid, secret: "tok")
     monkeypatch.setattr("backend.pipeline.run.scrape_deviantart", lambda cfg, token, dest: [])
     monkeypatch.setattr(
@@ -176,15 +173,10 @@ def test_run_processes_other_source_when_one_source_scrape_fails(tmp_path, monke
     monkeypatch.setattr("backend.pipeline.run.db.init_schema", lambda conn: None)
     monkeypatch.setattr("backend.pipeline.run.storage.get_r2_client", lambda: MagicMock())
 
-    def failing_reddit_client():
-        raise RuntimeError("reddit auth failed")
+    def failing_scrape_artstation(cfg, dest):
+        raise RuntimeError("artstation search failed")
 
-    monkeypatch.setattr("backend.pipeline.run.build_reddit_client", failing_reddit_client)
-    reddit_scrape_called = []
-    monkeypatch.setattr(
-        "backend.pipeline.run.scrape_reddit",
-        lambda cfg, client, dest: reddit_scrape_called.append(True) or [],
-    )
+    monkeypatch.setattr("backend.pipeline.run.scrape_artstation", failing_scrape_artstation)
     monkeypatch.setattr("backend.pipeline.run.get_access_token", lambda cid, secret: "tok")
     monkeypatch.setattr("backend.pipeline.run.scrape_deviantart", lambda cfg, token, dest: [deviantart_candidate])
     monkeypatch.setattr(
@@ -211,9 +203,8 @@ def test_run_processes_other_source_when_one_source_scrape_fails(tmp_path, monke
 
     run()
 
-    # Reddit's own scrape_reddit was never reached (client build failed first),
-    # but the DeviantArt candidate was still processed and persisted.
-    assert reddit_scrape_called == []
+    # ArtStation's scrape raised entirely, but the DeviantArt candidate was
+    # still processed and persisted.
     assert len(persisted) == 1
 
 
@@ -224,7 +215,7 @@ def test_run_shares_one_rate_limiter_and_daily_quota_between_analyzer_and_embedd
     build_gemini_analyzer and build_embedder, not build one pair per call."""
     from backend.pipeline.types import Candidate
 
-    candidate = Candidate(local_path=str(tmp_path / "a.jpg"), source="reddit", source_title="a", source_url="u1")
+    candidate = Candidate(local_path=str(tmp_path / "a.jpg"), source="artstation", source_title="a", source_url="u1")
     with open(candidate.local_path, "wb") as f:
         f.write(b"fake-bytes")
 
@@ -232,8 +223,7 @@ def test_run_shares_one_rate_limiter_and_daily_quota_between_analyzer_and_embedd
     monkeypatch.setattr("backend.pipeline.run.db.get_connection", lambda: MagicMock())
     monkeypatch.setattr("backend.pipeline.run.db.init_schema", lambda conn: None)
     monkeypatch.setattr("backend.pipeline.run.storage.get_r2_client", lambda: MagicMock())
-    monkeypatch.setattr("backend.pipeline.run.build_reddit_client", lambda: MagicMock())
-    monkeypatch.setattr("backend.pipeline.run.scrape_reddit", lambda cfg, client, dest: [candidate])
+    monkeypatch.setattr("backend.pipeline.run.scrape_artstation", lambda cfg, dest: [candidate])
     monkeypatch.setattr("backend.pipeline.run.get_access_token", lambda cid, secret: "tok")
     monkeypatch.setattr("backend.pipeline.run.scrape_deviantart", lambda cfg, token, dest: [])
     monkeypatch.setattr(

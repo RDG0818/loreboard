@@ -4,7 +4,7 @@ Loreboard is a full-stack web app that automates the acquisition, analysis, and 
 
 ## Core Features/Technical Stack
 
-- **Automated Data Pipeline**: A multi-stage process that scrapes and classifies image data from Reddit, DeviantArt, and ArtStation using the Contrastive Language-Image Pretraining (CLIP) model from [OpenAI](https://github.com/openai/CLIP).
+- **Automated Data Pipeline**: A multi-stage process that scrapes and classifies image data from DeviantArt and ArtStation using the Contrastive Language-Image Pretraining (CLIP) model from [OpenAI](https://github.com/openai/CLIP).
 
 - **LLM Metadata Generation**: Utilizes the Gemini API (`gemini-1.5-flash`) to generate captions, titles, tags, and analytical scores for all visual content, stored in a SQLite database.
 

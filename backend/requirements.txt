@@ -12,7 +12,6 @@ ollama
 timm
 transformers
 accelerate
-praw
 python-dotenv
 google-generativeai
 psycopg2-binary
