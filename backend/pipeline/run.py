@@ -1,87 +1,86 @@
-import os
-import tempfile
+import gzip
+import json
 
-from backend.pipeline import config as config_module
-from backend.pipeline import db, dedupe, storage
-from backend.pipeline.caption import AnalysisResult
-from backend.pipeline.caption_gemini import build_gemini_analyzer
-from backend.pipeline.classify_clip import load_clip_model, passes_content_gate
-from backend.pipeline.classify_heuristics import passes_heuristics
+import requests
+
+from backend.pipeline import cards
+from backend.pipeline import db
+from backend.pipeline.config import load_config
 from backend.pipeline.embed import build_embedder
-from backend.pipeline.persist import persist_image
 from backend.pipeline.rate_limit import DailyQuota, DailyQuotaExceeded, RateLimiter
-from backend.pipeline.scrape_artstation import scrape_artstation
-from backend.pipeline.scrape_deviantart import get_access_token, scrape_deviantart
+
+BULK_DATA_URL = "https://api.scryfall.com/bulk-data"
+HEADERS = {"User-Agent": "loreboard-mtg-pipeline/1.0", "Accept": "application/json"}
+BULK_DATA_TYPE = "unique_artwork"
+COMMIT_BATCH_SIZE = 500
 
 
-def _analysis_to_embedding_text(analysis: AnalysisResult) -> str:
-    return (
-        f"Art piece titled '{analysis.title}'. "
-        f"Style: {analysis.art_style}, {analysis.fantasy_mood}, {analysis.fantasy_scale}, {analysis.magic_level}. "
-        f"Tags: {', '.join(analysis.tags)}. "
-        f"Description: {analysis.caption}"
-    )
+def _find_bulk_download_uri(bulk_type: str = BULK_DATA_TYPE, session=requests) -> str:
+    response = session.get(BULK_DATA_URL, headers=HEADERS)
+    response.raise_for_status()
+    for entry in response.json()["data"]:
+        if entry["type"] == bulk_type:
+            return entry["jsonl_download_uri"]
+    raise ValueError(f"No bulk-data entry found for type {bulk_type!r}")
+
+
+def _iter_bulk_cards(download_uri: str, session=requests):
+    response = session.get(download_uri, headers=HEADERS, stream=True)
+    response.raise_for_status()
+    with gzip.GzipFile(fileobj=response.raw) as f:
+        for line in f:
+            line = line.strip()
+            if line:
+                yield json.loads(line)
+
+
+def ingest_cards(conn, session=requests) -> int:
+    download_uri = _find_bulk_download_uri(session=session)
+    count = 0
+    for raw_card in _iter_bulk_cards(download_uri, session=session):
+        try:
+            row = cards.card_row_from_json(raw_card)
+            cards.upsert_card(conn, row)
+            count += 1
+            if count % COMMIT_BATCH_SIZE == 0:
+                conn.commit()
+        except Exception as e:
+            print(f"Ingestion: skipping malformed card record: {e}")
+            continue
+    conn.commit()
+    return count
+
+
+def backfill_embeddings(conn, cfg) -> int:
+    rate_limiter = RateLimiter(calls_per_minute=cfg.gemini_rpm)
+    daily_quota = DailyQuota(max_calls_per_day=cfg.gemini_rpd)
+    embedder = build_embedder(cfg, rate_limiter, daily_quota)
+
+    embedded = 0
+    for card_id, text in cards.iter_missing_embeddings(conn):
+        try:
+            embedding = embedder.embed_text(text)
+            cards.set_card_embedding(conn, card_id, embedding)
+            conn.commit()
+            embedded += 1
+        except DailyQuotaExceeded:
+            print("Daily Gemini quota exhausted — stopping embedding backfill; already-embedded cards are saved.")
+            break
+        except Exception as e:
+            print(f"Embedding backfill: skipping card {card_id}: {e}")
+            continue
+    return embedded
 
 
 def run() -> None:
-    cfg = config_module.load_config()
+    cfg = load_config()
     conn = db.get_connection()
     try:
         db.init_schema(conn)
-        r2_client = storage.get_r2_client()
-
-        with tempfile.TemporaryDirectory() as tmp_dir:
-            artstation_candidates: list = []
-            deviantart_candidates: list = []
-
-            try:
-                artstation_candidates = scrape_artstation(cfg, tmp_dir)
-            except Exception as e:
-                print(f"ArtStation scrape failed entirely: {e}")
-
-            try:
-                token = get_access_token(os.environ["DEVIANTART_CLIENT_ID"], os.environ["DEVIANTART_CLIENT_SECRET"])
-                deviantart_candidates = scrape_deviantart(cfg, token, tmp_dir)
-            except Exception as e:
-                print(f"DeviantArt scrape failed entirely: {e}")
-
-            # Cap each source independently before combining so a single
-            # over-productive source can't crowd the other one out entirely
-            # once the combined list is truncated.
-            per_source_cap = cfg.images_per_run // 2
-            candidates = artstation_candidates[:per_source_cap] + deviantart_candidates[:per_source_cap]
-            new_candidates = dedupe.filter_new(conn, candidates)
-
-            clip_model = load_clip_model()
-            # A single shared RateLimiter/DailyQuota, since the design budget
-            # (gemini_rpm/gemini_rpd) is one ceiling covering both caption
-            # and embed calls to the Gemini API — not a separate budget each.
-            gemini_rate_limiter = RateLimiter(calls_per_minute=cfg.gemini_rpm)
-            gemini_daily_quota = DailyQuota(max_calls_per_day=cfg.gemini_rpd)
-            analyzer = build_gemini_analyzer(cfg, gemini_rate_limiter, gemini_daily_quota)
-            embedder = build_embedder(cfg, gemini_rate_limiter, gemini_daily_quota)
-
-            for candidate, image_hash in new_candidates:
-                try:
-                    if not passes_heuristics(candidate.local_path):
-                        continue
-                    if not passes_content_gate(clip_model, candidate.local_path, cfg.clip_confidence_threshold):
-                        continue
-
-                    analysis = analyzer.analyze_image(candidate.local_path)
-                    if not analysis.keep:
-                        continue
-
-                    embedding = embedder.embed_text(_analysis_to_embedding_text(analysis))
-                    ext = os.path.splitext(candidate.local_path)[1]
-                    filename = f"{image_hash}{ext}"
-                    persist_image(conn, r2_client, candidate.local_path, image_hash, filename, analysis, embedding)
-                except DailyQuotaExceeded:
-                    print("Daily Gemini quota exhausted — stopping run early; already-persisted images are saved.")
-                    break
-                except Exception as e:
-                    print(f"Skipping {candidate.local_path}: {e}")
-                    continue
+        ingested = ingest_cards(conn)
+        print(f"Ingested/updated {ingested} cards.")
+        embedded = backfill_embeddings(conn, cfg)
+        print(f"Embedded {embedded} cards.")
     finally:
         conn.close()
 
