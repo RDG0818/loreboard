@@ -1,22 +1,10 @@
 import os
 
 import google.generativeai as genai
-from google.api_core import exceptions as google_exceptions
 
 from backend.pipeline.config import PipelineConfig
+from backend.pipeline.gemini_retry import is_transient_gemini_error
 from backend.pipeline.rate_limit import DailyQuota, RateLimiter, with_backoff
-
-
-def _is_transient(e: Exception) -> bool:
-    """Filter to transient/retryable Gemini API errors only."""
-    return isinstance(
-        e,
-        (
-            google_exceptions.ResourceExhausted,
-            google_exceptions.ServiceUnavailable,
-            google_exceptions.DeadlineExceeded,
-        ),
-    )
 
 
 class Embedder:
@@ -30,7 +18,7 @@ class Embedder:
         self._rate_limiter.wait()
         result = with_backoff(
             lambda: self._embed_fn(model="models/text-embedding-004", content=text),
-            is_retryable=_is_transient,
+            is_retryable=is_transient_gemini_error,
         )
         return result["embedding"]
 

@@ -29,7 +29,7 @@ def _safe_filename(title: str, submission_id: str) -> str:
 
 
 def _download(url: str, dest_dir: str, base_name: str) -> str | None:
-    ext = os.path.splitext(url)[1].split("?")[0]
+    ext = os.path.splitext(url)[1].split("?")[0].lower()
     if ext not in IMAGE_FORMATS:
         return None
     response = requests.get(url, headers=HEADERS)

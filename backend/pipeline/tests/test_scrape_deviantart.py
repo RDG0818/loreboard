@@ -59,6 +59,78 @@ def test_scrape_deviantart_downloads_results_per_tag(tmp_path):
     assert os.path.exists(candidates[0].local_path)
 
 
+def test_scrape_deviantart_preserves_real_extension(tmp_path):
+    """PNG sources must be saved as .png, not silently forced to .jpg."""
+    cfg = PipelineConfig(
+        subreddits=[],
+        deviantart_tags=["fantasyart"],
+        images_per_run=10,
+        clip_confidence_threshold=0.26,
+        gemini_rpm=15,
+        gemini_rpd=1200,
+    )
+
+    browse_response = MagicMock()
+    browse_response.raise_for_status.return_value = None
+    browse_response.json.return_value = {
+        "results": [
+            {
+                "title": "Cool Art",
+                "deviationid": "dev1",
+                "content": {"src": "https://images-wixmp.example.com/f/art.png?token=abc"},
+            }
+        ]
+    }
+
+    image_response = MagicMock()
+    image_response.content = b"fake-image-bytes"
+    image_response.raise_for_status.return_value = None
+
+    session = MagicMock()
+    session.get.side_effect = [browse_response, image_response]
+
+    candidates = scrape_deviantart(cfg, "tok-123", str(tmp_path), session=session)
+
+    assert len(candidates) == 1
+    assert candidates[0].local_path.endswith(".png")
+    assert os.path.exists(candidates[0].local_path)
+
+
+def test_scrape_deviantart_falls_back_to_jpg_for_unrecognized_extension(tmp_path):
+    cfg = PipelineConfig(
+        subreddits=[],
+        deviantart_tags=["fantasyart"],
+        images_per_run=10,
+        clip_confidence_threshold=0.26,
+        gemini_rpm=15,
+        gemini_rpd=1200,
+    )
+
+    browse_response = MagicMock()
+    browse_response.raise_for_status.return_value = None
+    browse_response.json.return_value = {
+        "results": [
+            {
+                "title": "Cool Art",
+                "deviationid": "dev1",
+                "content": {"src": "https://example.com/art"},
+            }
+        ]
+    }
+
+    image_response = MagicMock()
+    image_response.content = b"fake-image-bytes"
+    image_response.raise_for_status.return_value = None
+
+    session = MagicMock()
+    session.get.side_effect = [browse_response, image_response]
+
+    candidates = scrape_deviantart(cfg, "tok-123", str(tmp_path), session=session)
+
+    assert len(candidates) == 1
+    assert candidates[0].local_path.endswith(".jpg")
+
+
 def test_scrape_deviantart_continues_after_one_tag_fails(tmp_path):
     cfg = PipelineConfig(
         subreddits=[],

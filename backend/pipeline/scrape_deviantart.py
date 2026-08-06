@@ -9,6 +9,8 @@ from backend.pipeline.types import Candidate
 BROWSE_URL = "https://www.deviantart.com/api/v1/oauth2/browse/tags"
 TOKEN_URL = "https://www.deviantart.com/oauth2/token"
 TAG_LIMIT = 50
+IMAGE_FORMATS = (".jpg", ".jpeg", ".png", ".webp")
+DEFAULT_EXTENSION = ".jpg"
 
 
 def get_access_token(client_id: str, client_secret: str, session=requests) -> str:
@@ -29,6 +31,11 @@ def get_access_token(client_id: str, client_secret: str, session=requests) -> st
 def _safe_filename(title: str, deviation_id: str) -> str:
     safe_title = "".join(c for c in title if c.isalpha() or c.isdigit() or c.isspace()).rstrip()[:50]
     return f"{safe_title}_{deviation_id}"
+
+
+def _extension_from_url(url: str) -> str:
+    ext = os.path.splitext(url.split("?")[0])[1].lower()
+    return ext if ext in IMAGE_FORMATS else DEFAULT_EXTENSION
 
 
 def _is_transient(e: Exception) -> bool:
@@ -69,7 +76,7 @@ def scrape_deviantart(
                         continue
 
                     base_name = _safe_filename(deviation["title"], deviation["deviationid"])
-                    dest_path = os.path.join(dest_dir, f"{base_name}.jpg")
+                    dest_path = os.path.join(dest_dir, f"{base_name}{_extension_from_url(image_url)}")
 
                     img_response = with_backoff(lambda: _get(session, image_url), is_retryable=_is_transient)
                     with open(dest_path, "wb") as f:

@@ -1,24 +1,12 @@
 import os
 
 import google.generativeai as genai
-from google.api_core import exceptions as google_exceptions
 from PIL import Image
 
 from backend.pipeline.caption import ANALYSIS_PROMPT, AnalysisResult, MalformedAnalysisError, parse_analysis_json
 from backend.pipeline.config import PipelineConfig
+from backend.pipeline.gemini_retry import is_transient_gemini_error
 from backend.pipeline.rate_limit import DailyQuota, RateLimiter, with_backoff
-
-
-def _is_transient(e: Exception) -> bool:
-    """Filter to transient/retryable Gemini API errors only."""
-    return isinstance(
-        e,
-        (
-            google_exceptions.ResourceExhausted,
-            google_exceptions.ServiceUnavailable,
-            google_exceptions.DeadlineExceeded,
-        ),
-    )
 
 
 class GeminiAnalyzer:
@@ -47,7 +35,7 @@ class GeminiAnalyzer:
                     [ANALYSIS_PROMPT, img],
                     generation_config={"response_mime_type": "application/json"},
                 ),
-                is_retryable=_is_transient,
+                is_retryable=is_transient_gemini_error,
             )
             try:
                 return parse_analysis_json(response.text)

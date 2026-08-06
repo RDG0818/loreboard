@@ -146,6 +146,37 @@ def test_scrape_reddit_continues_after_one_image_fails(tmp_path, monkeypatch):
         assert f.read() == b"good-image-bytes"
 
 
+def test_scrape_reddit_downloads_uppercase_extension(tmp_path, monkeypatch):
+    """Uppercase URL extensions (e.g. .JPG) must not be silently dropped."""
+    cfg = PipelineConfig(
+        subreddits=["ImaginaryBestOf"],
+        deviantart_tags=[],
+        images_per_run=10,
+        clip_confidence_threshold=0.26,
+        gemini_rpm=15,
+        gemini_rpd=1200,
+    )
+
+    submission = _make_submission("Cool Painting", "https://example.com/pic.JPG")
+    subreddit = MagicMock()
+    subreddit.hot.return_value = [submission]
+    reddit_client = MagicMock()
+    reddit_client.subreddit.return_value = subreddit
+
+    fake_response = MagicMock()
+    fake_response.content = b"fake-image-bytes"
+    fake_response.raise_for_status.return_value = None
+    monkeypatch.setattr(
+        "backend.pipeline.scrape_reddit.requests.get",
+        lambda url, headers=None: fake_response,
+    )
+
+    candidates = scrape_reddit(cfg, reddit_client, str(tmp_path))
+
+    assert len(candidates) == 1
+    assert os.path.exists(candidates[0].local_path)
+
+
 def test_scrape_reddit_same_titled_submissions_get_distinct_filenames(tmp_path, monkeypatch):
     """Two submissions with the same (or same-after-truncation) title must not
     overwrite each other's downloaded file — the submission id disambiguates
