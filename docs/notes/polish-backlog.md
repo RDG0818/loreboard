@@ -7,7 +7,13 @@ grouped — just dump here. Triage periodically into sweeps below.
 
 (add items here — one line each, area tag prefix: `[fe]` frontend, `[be]` backend, `[data]` pipeline/data, `[ge]` general)
 
-(empty — everything triaged into sweeps/later below as of this pass)
+- there still exists a point when clicking on an image where it shows just the art, not the full card. Figure out a way for this to not happen.
+- When hiding the sidebar while we are somewhat far down in the page, the images all reshuffle. Figure out a way for this not to happen
+- button for hiding the side bar is somewhat close to the home button. consider ways to make them look more discretized
+- keep the search bar visible as you scroll, don't let it hide
+- add a button in the top right for the user profile, similar to pinterest
+- add the ability to click on an image under the saved tab to see the full card
+- 
 
 ## Done
 
