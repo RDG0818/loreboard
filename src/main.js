@@ -6,6 +6,7 @@ const API_BASE = 'http://127.0.0.1:8000';
 document.addEventListener('DOMContentLoaded', async () => {
   const gallery = document.querySelector('.gallery');
   const scrollTrigger = document.getElementById('scroll-trigger');
+  const searchInput = document.getElementById('search-input');
 
   let nextCursor = null;
   let hasMore = true;
@@ -135,6 +136,64 @@ document.addEventListener('DOMContentLoaded', async () => {
     } catch (error) {
       modalOracleText.textContent = 'Could not load card details.';
     }
+  });
+
+  let searchDebounce;
+  searchInput.addEventListener('input', () => {
+    clearTimeout(searchDebounce);
+    searchDebounce = setTimeout(async () => {
+      const query = searchInput.value.trim();
+      gallery.innerHTML = '<div class="gutter-sizer"></div>';
+      msnry = null;
+      if (!query) {
+        nextCursor = null;
+        hasMore = true;
+        loadMoreCards();
+        return;
+      }
+
+      hasMore = false; // search results aren't paginated in this phase
+      try {
+        const response = await fetch(`${API_BASE}/api/v1/search/natural`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ query }),
+        });
+        const results = await response.json();
+        msnry = new Masonry(gallery, {
+          itemSelector: '.image-wrapper',
+          columnWidth: '.image-wrapper',
+          gutter: 15,
+        });
+        for (const card of results) {
+          const artUrl = card.image_uris && card.image_uris.art_crop;
+          if (!artUrl) continue;
+          const wrapper = document.createElement('div');
+          wrapper.classList.add('image-wrapper');
+          wrapper.dataset.cardId = card.id;
+
+          const img = document.createElement('img');
+          img.src = artUrl;
+
+          const overlay = document.createElement('div');
+          overlay.classList.add('overlay');
+
+          const artistLabel = document.createElement('span');
+          artistLabel.classList.add('artist-label');
+          artistLabel.textContent = card.artist || '';
+
+          wrapper.appendChild(img);
+          wrapper.appendChild(overlay);
+          wrapper.appendChild(artistLabel);
+          gallery.appendChild(wrapper);
+          await new Promise((resolve) => imagesLoaded(wrapper).on('always', resolve));
+          msnry.appended(wrapper);
+          msnry.layout();
+        }
+      } catch (error) {
+        gallery.innerHTML = '<p class="error-message">Search failed.</p>';
+      }
+    }, 400);
   });
 
   function closeModal() {

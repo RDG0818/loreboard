@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>For You</title>
+  <link rel="stylesheet" href="src/style.css" />
+  <script src="https://unpkg.com/lucide@latest"></script>
+</head>
+<body>
+  <div class="page">
+    <aside class="sidebar">
+      <ul>
+        <li><a href="index.html" class="nav-link"><i data-lucide="home"></i></a></li>
+        <li><a href="favorites.html" class="nav-link"><i data-lucide="heart"></i></a></li>
+        <li><a href="recommendations.html" class="nav-link active"><i data-lucide="sparkles"></i></a></li>
+      </ul>
+    </aside>
+
+    <main class="gallery-container">
+      <header class="page-header">
+        <h1 class="page-title">For You</h1>
+      </header>
+      <p id="recommendations-message"></p>
+      <div class="gallery" id="recommendations-gallery">
+        <div class="gutter-sizer"></div>
+      </div>
+    </main>
+  </div>
+
+  <script src="src/recommendations.js" type="module"></script>
+</body>
+</html>
