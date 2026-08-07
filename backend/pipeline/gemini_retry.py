@@ -1,13 +1,11 @@
-from google.api_core import exceptions as google_exceptions
+from google.genai import errors as genai_errors
+
+_TRANSIENT_STATUS_CODES = {429, 500, 503, 504}
 
 
 def is_transient_gemini_error(e: Exception) -> bool:
-    """Filter to transient/retryable Gemini API errors only."""
-    return isinstance(
-        e,
-        (
-            google_exceptions.ResourceExhausted,
-            google_exceptions.ServiceUnavailable,
-            google_exceptions.DeadlineExceeded,
-        ),
-    )
+    """Filter to transient/retryable Gemini API errors only. The google-genai
+    SDK (unlike the deprecated google-generativeai/api_core one) doesn't
+    expose distinct exception classes per status — every HTTP error is a
+    genai_errors.APIError with a `.code` attribute, so filter on that."""
+    return isinstance(e, genai_errors.APIError) and e.code in _TRANSIENT_STATUS_CODES

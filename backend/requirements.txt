@@ -2,8 +2,7 @@ fastapi
 uvicorn
 numpy
 python-dotenv
-google-generativeai
-google-api-core
+google-genai
 requests
 psycopg2-binary
 pgvector

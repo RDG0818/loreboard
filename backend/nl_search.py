@@ -1,8 +1,10 @@
 import os
 
-import google.generativeai as genai
+from google import genai
 
 from backend.query_parser import QueryParseError, parse_query
+
+GENERATION_MODEL = "gemini-flash-latest"
 
 TRANSLATION_PROMPT = """Translate this Magic: The Gathering card search request into a compact query using ONLY this grammar, space-separated, one condition per token:
 
@@ -24,10 +26,25 @@ Request: "{request}"
 Reply:"""
 
 
+class _GenerateContentAdapter:
+    """Wraps a google-genai Client to expose the old
+    `model.generate_content(prompt) -> response` shape, so callers (and
+    tests, which inject a plain mock in that shape) don't need to know
+    about the new SDK's client.models.generate_content(model=, contents=)
+    call convention."""
+
+    def __init__(self, client: genai.Client, model_name: str):
+        self._client = client
+        self._model_name = model_name
+
+    def generate_content(self, prompt: str):
+        return self._client.models.generate_content(model=self._model_name, contents=prompt)
+
+
 def translate_natural_language_query(text: str, model=None) -> str:
     if model is None:
-        genai.configure(api_key=os.environ["GOOGLE_API_KEY"])
-        model = genai.GenerativeModel("gemini-1.5-flash-latest")
+        client = genai.Client(api_key=os.environ["GOOGLE_API_KEY"])
+        model = _GenerateContentAdapter(client, GENERATION_MODEL)
     response = model.generate_content(TRANSLATION_PROMPT.format(request=text))
     return response.text.strip()
 

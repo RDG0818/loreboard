@@ -9,12 +9,18 @@
 </head>
 <body>
   <div class="page">
+    <button class="sidebar-toggle" id="sidebar-toggle" aria-label="Toggle sidebar">
+      <i data-lucide="chevron-left"></i>
+    </button>
     <aside class="sidebar">
       <ul>
         <li><a href="index.html" class="nav-link"><i data-lucide="home"></i></a></li>
         <li><a href="favorites.html" class="nav-link"><i data-lucide="heart"></i></a></li>
         <li><a href="recommendations.html" class="nav-link active"><i data-lucide="sparkles"></i></a></li>
       </ul>
+      <a href="/auth/login/google" id="sidebar-signin" class="sidebar-signin" title="Sign in">
+        <i data-lucide="log-in"></i>
+      </a>
     </aside>
 
     <main class="gallery-container">

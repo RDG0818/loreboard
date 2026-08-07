@@ -1,10 +1,19 @@
 import os
 
-import google.generativeai as genai
+from google import genai
+from google.genai import types
 
 from backend.pipeline.config import PipelineConfig
 from backend.pipeline.gemini_retry import is_transient_gemini_error
 from backend.pipeline.rate_limit import DailyQuota, RateLimiter, with_backoff
+
+EMBEDDING_MODEL = "gemini-embedding-001"
+# Matches the pgvector column's fixed vector(768) dimension (db.py). The
+# model defaults to 3072-d; nearest-neighbor search here uses cosine
+# distance (vector_cosine_ops / `<=>`), which is scale-invariant, so the
+# manual re-normalization Google's docs recommend for non-default
+# dimensions isn't needed for correctness with this operator.
+EMBEDDING_DIMENSIONALITY = 768
 
 
 class Embedder:
@@ -17,10 +26,14 @@ class Embedder:
         self._daily_quota.consume()
         self._rate_limiter.wait()
         result = with_backoff(
-            lambda: self._embed_fn(model="models/text-embedding-004", content=text),
+            lambda: self._embed_fn(
+                model=EMBEDDING_MODEL,
+                contents=text,
+                config=types.EmbedContentConfig(output_dimensionality=EMBEDDING_DIMENSIONALITY),
+            ),
             is_retryable=is_transient_gemini_error,
         )
-        return result["embedding"]
+        return result.embeddings[0].values
 
 
 def build_embedder(
@@ -34,9 +47,9 @@ def build_embedder(
     pass them into both builders, since the design budget (gemini_rpm/
     gemini_rpd) is a single ceiling shared across caption and embed calls,
     not one per call site."""
-    genai.configure(api_key=os.environ["GOOGLE_API_KEY"])
+    client = genai.Client(api_key=os.environ["GOOGLE_API_KEY"])
     if rate_limiter is None:
         rate_limiter = RateLimiter(calls_per_minute=config.gemini_rpm)
     if daily_quota is None:
         daily_quota = DailyQuota(max_calls_per_day=config.gemini_rpd)
-    return Embedder(genai.embed_content, rate_limiter, daily_quota)
+    return Embedder(client.models.embed_content, rate_limiter, daily_quota)

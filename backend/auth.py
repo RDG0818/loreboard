@@ -43,6 +43,14 @@ async def auth_callback(request: Request):
     return RedirectResponse(url="/")
 
 
+@router.get("/api/v1/me")
+async def me(request: Request):
+    user = get_current_user(request)
+    if user is None:
+        return {"logged_in": False}
+    return {"logged_in": True, "email": user["email"]}
+
+
 def get_current_user(request: Request) -> dict | None:
     user_id = request.session.get("user_id")
     if user_id is None:

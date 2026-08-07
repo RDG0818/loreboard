@@ -1,9 +1,14 @@
 import Masonry from 'masonry-layout';
 import imagesLoaded from 'imagesloaded';
+import { cardArtUrl, createCardWrapper, createSaveToggler } from './cardRender.js';
+import { initSidebarToggle } from './sidebar.js';
+import { initSignInLink } from './authStatus.js';
 
 const API_BASE = '';
 
 document.addEventListener('DOMContentLoaded', async () => {
+  initSidebarToggle();
+  initSignInLink(API_BASE);
   const gallery = document.querySelector('.gallery');
   const scrollTrigger = document.getElementById('scroll-trigger');
   const searchInput = document.getElementById('search-input');
@@ -24,6 +29,8 @@ document.addEventListener('DOMContentLoaded', async () => {
   } catch (error) {
     // Not logged in or backend unreachable — treat as no saves; the feed itself still works.
   }
+  const toggleSave = createSaveToggler(API_BASE, savedCardIds);
+  const cardsById = new Map();
 
   async function fetchCardsPage() {
     const params = new URLSearchParams({ limit: '30' });
@@ -37,10 +44,6 @@ document.addEventListener('DOMContentLoaded', async () => {
       gallery.innerHTML = `<p class="error-message">Could not load cards. Please ensure the backend is running.</p>`;
       return [];
     }
-  }
-
-  function cardArtUrl(card) {
-    return card.image_uris && card.image_uris.art_crop;
   }
 
   async function loadMoreCards(token = searchToken) {
@@ -78,23 +81,8 @@ document.addEventListener('DOMContentLoaded', async () => {
       const artUrl = cardArtUrl(card);
       if (!artUrl) continue;
 
-      const wrapper = document.createElement('div');
-      wrapper.classList.add('image-wrapper');
-      wrapper.dataset.cardId = card.id;
-
-      const img = document.createElement('img');
-      img.src = artUrl;
-
-      const overlay = document.createElement('div');
-      overlay.classList.add('overlay');
-
-      const artistLabel = document.createElement('span');
-      artistLabel.classList.add('artist-label');
-      artistLabel.textContent = card.artist || '';
-
-      wrapper.appendChild(img);
-      wrapper.appendChild(overlay);
-      wrapper.appendChild(artistLabel);
+      cardsById.set(card.id, card);
+      const wrapper = createCardWrapper(card, { savedCardIds, onToggleSave: toggleSave });
       gallery.appendChild(wrapper);
 
       await new Promise((resolve) => imagesLoaded(wrapper).on('always', resolve));
@@ -119,20 +107,36 @@ document.addEventListener('DOMContentLoaded', async () => {
   observer.observe(scrollTrigger);
   loadMoreCards();
 
+  // IntersectionObserver samples geometry at throttled checkpoints, so a
+  // fast/flung scroll can move scrollTrigger from "below viewport" to
+  // "already scrolled past" between two samples without ever reporting
+  // isIntersecting: true — the observer misses the crossing entirely and
+  // loadMoreCards() never fires. Back it with a plain scroll-position check
+  // as a fallback; loadMoreCards()'s own isLoading/hasMore guards make it
+  // safe to call redundantly.
+  function checkScrollFallback() {
+    if (!hasMore || isLoading) return;
+    const { scrollY, innerHeight } = window;
+    const scrollHeight = document.documentElement.scrollHeight;
+    if (scrollHeight - (scrollY + innerHeight) < 400) loadMoreCards();
+  }
+  window.addEventListener('scroll', checkScrollFallback, { passive: true });
+  window.addEventListener('resize', checkScrollFallback);
+
+  window.addEventListener('sidebar:layout-change', () => {
+    if (msnry) msnry.layout();
+  });
+
   window.lucide.createIcons();
 
   const modal = document.getElementById('image-modal');
   const modalImg = document.getElementById('modal-image');
-  const modalName = document.getElementById('modal-name');
-  const modalManaCost = document.getElementById('modal-mana-cost');
-  const modalTypeLine = document.getElementById('modal-type-line');
-  const modalOracleText = document.getElementById('modal-oracle-text');
   const modalArtist = document.getElementById('modal-artist');
   const modalSaveBtn = document.getElementById('modal-save-btn');
   let currentModalCardId = null;
   const closeBtn = document.querySelector('.close-btn');
 
-  gallery.addEventListener('click', async (e) => {
+  gallery.addEventListener('click', (e) => {
     const wrapper = e.target.closest('.image-wrapper');
     if (!wrapper) return;
     const cardId = wrapper.dataset.cardId;
@@ -144,29 +148,31 @@ document.addEventListener('DOMContentLoaded', async () => {
       modalSaveBtn.textContent = 'Save';
       modalSaveBtn.classList.remove('saved');
     }
+
+    // Card list/search responses already carry the full image_uris (incl.
+    // `normal`) and artist — no need to re-fetch.
+    const card = cardsById.get(cardId);
     const img = wrapper.querySelector('img');
 
     modal.classList.add('modal--active');
-    modalImg.src = img.src;
-    modalName.textContent = '';
-    modalManaCost.textContent = '';
-    modalTypeLine.textContent = '';
-    modalOracleText.textContent = 'Loading...';
-    modalArtist.textContent = '';
+    modalArtist.textContent = card && card.artist ? `Art by ${card.artist}` : '';
 
-    try {
-      const response = await fetch(`${API_BASE}/api/v1/cards/${cardId}`);
-      const card = await response.json();
-      modalName.textContent = card.name;
-      modalManaCost.textContent = card.mana_cost || '';
-      modalTypeLine.textContent = card.type_line || '';
-      modalOracleText.textContent = card.oracle_text || '';
-      modalArtist.textContent = card.artist ? `Art by ${card.artist}` : '';
-      if (card.image_uris && card.image_uris.normal) {
-        modalImg.src = card.image_uris.normal;
-      }
-    } catch (error) {
-      modalOracleText.textContent = 'Could not load card details.';
+    // `modalImg` is a single reused element, so assigning `.src` directly to
+    // the (likely uncached) full-size image leaves the *previous* card's
+    // bitmap on screen until the new one finishes loading — an <img> doesn't
+    // clear on src reassignment. Show the grid thumbnail first (already
+    // cached from the grid render, so it paints instantly and is always the
+    // right card), then preload the full image and swap only once it's
+    // ready. The cardId guard drops a stale preload if the user has already
+    // clicked a different card before this one finishes loading.
+    modalImg.src = img.src;
+    const normalUrl = card && card.image_uris && card.image_uris.normal;
+    if (normalUrl && normalUrl !== img.src) {
+      const preload = new Image();
+      preload.onload = () => {
+        if (currentModalCardId === cardId) modalImg.src = normalUrl;
+      };
+      preload.src = normalUrl;
     }
   });
 
@@ -208,33 +214,22 @@ document.addEventListener('DOMContentLoaded', async () => {
           columnWidth: '.image-wrapper',
           gutter: 15,
         });
+        const wrappers = [];
         for (const card of results) {
-          if (thisToken !== searchToken) return; // superseded by a newer search
-          const artUrl = card.image_uris && card.image_uris.art_crop;
+          const artUrl = cardArtUrl(card);
           if (!artUrl) continue;
-          const wrapper = document.createElement('div');
-          wrapper.classList.add('image-wrapper');
-          wrapper.dataset.cardId = card.id;
-
-          const img = document.createElement('img');
-          img.src = artUrl;
-
-          const overlay = document.createElement('div');
-          overlay.classList.add('overlay');
-
-          const artistLabel = document.createElement('span');
-          artistLabel.classList.add('artist-label');
-          artistLabel.textContent = card.artist || '';
-
-          wrapper.appendChild(img);
-          wrapper.appendChild(overlay);
-          wrapper.appendChild(artistLabel);
+          cardsById.set(card.id, card);
+          const wrapper = createCardWrapper(card, { savedCardIds, onToggleSave: toggleSave });
           gallery.appendChild(wrapper);
-          await new Promise((resolve) => imagesLoaded(wrapper).on('always', resolve));
-          if (thisToken !== searchToken) return; // superseded by a newer search
-          msnry.appended(wrapper);
-          msnry.layout();
+          wrappers.push(wrapper);
         }
+
+        // Images load in parallel rather than one-at-a-time — with hundreds of
+        // results a serial await-per-image loop made results trickle in visibly slowly.
+        await new Promise((resolve) => imagesLoaded(gallery).on('always', resolve));
+        if (thisToken !== searchToken) return; // superseded by a newer search
+        msnry.appended(wrappers);
+        msnry.layout();
       } catch (error) {
         if (thisToken !== searchToken) return; // superseded by a newer search
         gallery.innerHTML = '<p class="error-message">Search failed.</p>';
@@ -253,26 +248,10 @@ document.addEventListener('DOMContentLoaded', async () => {
   modalSaveBtn.addEventListener('click', async () => {
     if (!currentModalCardId) return;
     const isSaved = modalSaveBtn.classList.contains('saved');
-    const method = isSaved ? 'DELETE' : 'POST';
-    const url = isSaved
-      ? `${API_BASE}/api/v1/saves/${currentModalCardId}`
-      : `${API_BASE}/api/v1/saves`;
 
     try {
-      const response = await fetch(url, {
-        method,
-        credentials: 'include',
-        headers: { 'Content-Type': 'application/json' },
-        body: isSaved ? undefined : JSON.stringify({ card_id: currentModalCardId }),
-      });
-
-      if (response.status === 401) {
-        window.location.href = `${API_BASE}/auth/login/google`;
-        return;
-      }
-
-      if (!response.ok) {
-        console.error('Failed to update save state:', response.status);
+      const ok = await toggleSave(currentModalCardId, !isSaved);
+      if (!ok) {
         const previousText = modalSaveBtn.textContent;
         modalSaveBtn.textContent = 'Error';
         setTimeout(() => {
@@ -283,10 +262,13 @@ document.addEventListener('DOMContentLoaded', async () => {
 
       modalSaveBtn.textContent = isSaved ? 'Save' : 'Saved';
       modalSaveBtn.classList.toggle('saved', !isSaved);
-      if (isSaved) {
-        savedCardIds.delete(currentModalCardId);
-      } else {
-        savedCardIds.add(currentModalCardId);
+
+      const cardSaveBtn = gallery.querySelector(
+        `.image-wrapper[data-card-id="${currentModalCardId}"] .save-btn`
+      );
+      if (cardSaveBtn) {
+        cardSaveBtn.textContent = isSaved ? 'Save' : 'Saved';
+        cardSaveBtn.classList.toggle('saved', !isSaved);
       }
     } catch (error) {
       console.error('Failed to update save state:', error);

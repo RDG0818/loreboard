@@ -1,9 +1,14 @@
 import Masonry from 'masonry-layout';
 import imagesLoaded from 'imagesloaded';
+import { cardArtUrl, createCardWrapper } from './cardRender.js';
+import { initSidebarToggle } from './sidebar.js';
+import { initSignInLink } from './authStatus.js';
 
 const API_BASE = '';
 
 document.addEventListener('DOMContentLoaded', async () => {
+  initSidebarToggle();
+  initSignInLink(API_BASE);
   const gallery = document.getElementById('favorites-gallery');
 
   const msnry = new Masonry(gallery, {
@@ -12,6 +17,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     gutter: '.gutter-sizer',
     percentPosition: true,
   });
+  window.addEventListener('sidebar:layout-change', () => msnry.layout());
 
   let saved;
   try {
@@ -27,17 +33,10 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
 
   for (const card of saved) {
-    const artUrl = card.image_uris && card.image_uris.art_crop;
+    const artUrl = cardArtUrl(card);
     if (!artUrl) continue;
 
-    const wrapper = document.createElement('div');
-    wrapper.classList.add('image-wrapper');
-
-    const img = document.createElement('img');
-    img.src = artUrl;
-
-    const overlay = document.createElement('div');
-    overlay.classList.add('overlay');
+    const wrapper = createCardWrapper(card);
 
     const removeBtn = document.createElement('button');
     removeBtn.classList.add('remove-btn');
@@ -68,8 +67,6 @@ document.addEventListener('DOMContentLoaded', async () => {
       }
     });
 
-    wrapper.appendChild(img);
-    wrapper.appendChild(overlay);
     wrapper.appendChild(removeBtn);
     gallery.appendChild(wrapper);
 

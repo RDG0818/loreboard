@@ -1,9 +1,14 @@
 import Masonry from 'masonry-layout';
 import imagesLoaded from 'imagesloaded';
+import { cardArtUrl, createCardWrapper, createSaveToggler } from './cardRender.js';
+import { initSidebarToggle } from './sidebar.js';
+import { initSignInLink } from './authStatus.js';
 
 const API_BASE = '';
 
 document.addEventListener('DOMContentLoaded', async () => {
+  initSidebarToggle();
+  initSignInLink(API_BASE);
   const gallery = document.getElementById('recommendations-gallery');
   const messageEl = document.getElementById('recommendations-message');
 
@@ -20,6 +25,18 @@ document.addEventListener('DOMContentLoaded', async () => {
     return;
   }
 
+  let savedCardIds = new Set();
+  try {
+    const savesResponse = await fetch(`${API_BASE}/api/v1/saves`, { credentials: 'include' });
+    if (savesResponse.ok) {
+      const saves = await savesResponse.json();
+      savedCardIds = new Set(saves.map((c) => c.id));
+    }
+  } catch (error) {
+    // Saved-state fetch failing shouldn't block showing recommendations.
+  }
+  const toggleSave = createSaveToggler(API_BASE, savedCardIds);
+
   if (body.message) {
     messageEl.textContent = body.message;
   }
@@ -35,27 +52,12 @@ document.addEventListener('DOMContentLoaded', async () => {
     columnWidth: '.image-wrapper',
     gutter: 15,
   });
+  window.addEventListener('sidebar:layout-change', () => msnry.layout());
 
   for (const card of body.recommendations) {
-    const artUrl = card.image_uris && card.image_uris.art_crop;
+    const artUrl = cardArtUrl(card);
     if (!artUrl) continue;
-    const wrapper = document.createElement('div');
-    wrapper.classList.add('image-wrapper');
-    wrapper.dataset.cardId = card.id;
-
-    const img = document.createElement('img');
-    img.src = artUrl;
-
-    const overlay = document.createElement('div');
-    overlay.classList.add('overlay');
-
-    const artistLabel = document.createElement('span');
-    artistLabel.classList.add('artist-label');
-    artistLabel.textContent = card.artist || '';
-
-    wrapper.appendChild(img);
-    wrapper.appendChild(overlay);
-    wrapper.appendChild(artistLabel);
+    const wrapper = createCardWrapper(card, { savedCardIds, onToggleSave: toggleSave });
     gallery.appendChild(wrapper);
     await new Promise((resolve) => imagesLoaded(wrapper).on('always', resolve));
     msnry.appended(wrapper);

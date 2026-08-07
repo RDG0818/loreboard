@@ -98,7 +98,7 @@ def get_card(conn, card_id: str) -> dict | None:
         return cur.fetchone()
 
 
-def search_cards(conn, where_sql: str, params: list, limit: int = 60) -> list[dict]:
+def search_cards(conn, where_sql: str, params: list, limit: int = 300) -> list[dict]:
     query = f"SELECT {CARD_LIST_COLUMNS} FROM cards WHERE {where_sql} ORDER BY name LIMIT %s"
     with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
         cur.execute(query, params + [limit])
