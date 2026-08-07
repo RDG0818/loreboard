@@ -100,12 +100,17 @@ document.addEventListener('DOMContentLoaded', async () => {
   const modalTypeLine = document.getElementById('modal-type-line');
   const modalOracleText = document.getElementById('modal-oracle-text');
   const modalArtist = document.getElementById('modal-artist');
+  const modalSaveBtn = document.getElementById('modal-save-btn');
+  let currentModalCardId = null;
   const closeBtn = document.querySelector('.close-btn');
 
   gallery.addEventListener('click', async (e) => {
     const wrapper = e.target.closest('.image-wrapper');
     if (!wrapper) return;
     const cardId = wrapper.dataset.cardId;
+    currentModalCardId = cardId;
+    modalSaveBtn.textContent = 'Save';
+    modalSaveBtn.classList.remove('saved');
     const img = wrapper.querySelector('img');
 
     modal.classList.add('modal--active');
@@ -138,5 +143,29 @@ document.addEventListener('DOMContentLoaded', async () => {
   closeBtn.addEventListener('click', closeModal);
   modal.addEventListener('click', (e) => {
     if (e.target === modal) closeModal();
+  });
+
+  modalSaveBtn.addEventListener('click', async () => {
+    if (!currentModalCardId) return;
+    const isSaved = modalSaveBtn.classList.contains('saved');
+    const method = isSaved ? 'DELETE' : 'POST';
+    const url = isSaved
+      ? `${API_BASE}/api/v1/saves/${currentModalCardId}`
+      : `${API_BASE}/api/v1/saves`;
+
+    const response = await fetch(url, {
+      method,
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: isSaved ? undefined : JSON.stringify({ card_id: currentModalCardId }),
+    });
+
+    if (response.status === 401) {
+      window.location.href = `${API_BASE}/auth/login/google`;
+      return;
+    }
+
+    modalSaveBtn.textContent = isSaved ? 'Save' : 'Saved';
+    modalSaveBtn.classList.toggle('saved', !isSaved);
   });
 });

@@ -1,11 +1,11 @@
 import Masonry from 'masonry-layout';
 import imagesLoaded from 'imagesloaded';
 
-document.addEventListener('DOMContentLoaded', () => {
-  const gallery = document.getElementById('favorites-gallery');
-  const saved = JSON.parse(localStorage.getItem('favorites') || '[]');
+const API_BASE = 'http://127.0.0.1:8000';
 
-  // Initialize Masonry with 3-column layout
+document.addEventListener('DOMContentLoaded', async () => {
+  const gallery = document.getElementById('favorites-gallery');
+
   const msnry = new Masonry(gallery, {
     itemSelector: '.image-wrapper',
     columnWidth: '.grid-sizer',
@@ -13,12 +13,28 @@ document.addEventListener('DOMContentLoaded', () => {
     percentPosition: true,
   });
 
-  for (const src of saved) {
+  let saved;
+  try {
+    const response = await fetch(`${API_BASE}/api/v1/saves`, { credentials: 'include' });
+    if (response.status === 401) {
+      window.location.href = `${API_BASE}/auth/login/google`;
+      return;
+    }
+    saved = await response.json();
+  } catch (error) {
+    gallery.innerHTML = `<p class="error-message">Could not load your saves.</p>`;
+    return;
+  }
+
+  for (const card of saved) {
+    const artUrl = card.image_uris && card.image_uris.art_crop;
+    if (!artUrl) continue;
+
     const wrapper = document.createElement('div');
     wrapper.classList.add('image-wrapper');
 
     const img = document.createElement('img');
-    img.src = src;
+    img.src = artUrl;
 
     const overlay = document.createElement('div');
     overlay.classList.add('overlay');
@@ -27,62 +43,23 @@ document.addEventListener('DOMContentLoaded', () => {
     removeBtn.classList.add('remove-btn');
     removeBtn.innerHTML = '<i data-lucide="trash-2"></i>';
 
-    removeBtn.addEventListener('click', (e) => {
-        e.stopPropagation(); 
-
-        const currentSaved = JSON.parse(localStorage.getItem('favorites') || '[]');
-        const updatedSaved = currentSaved.filter(item => item !== src);
-
-        localStorage.setItem('favorites', JSON.stringify(updatedSaved));
-
-        msnry.remove(wrapper);
-        msnry.layout();
-
-        setTimeout(() => {
-            console.log("Item removed and layout updated.");
-        }, 100);
+    removeBtn.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      await fetch(`${API_BASE}/api/v1/saves/${card.id}`, { method: 'DELETE', credentials: 'include' });
+      msnry.remove(wrapper);
+      msnry.layout();
     });
-
 
     wrapper.appendChild(img);
     wrapper.appendChild(overlay);
     wrapper.appendChild(removeBtn);
     gallery.appendChild(wrapper);
 
-    // Wait for image to load, then layout
     imagesLoaded(wrapper, () => {
       msnry.appended(wrapper);
       msnry.layout();
     });
   }
 
-    const modal = document.getElementById('image-modal');
-    const modalImg = document.getElementById('modal-image');
-    const closeBtn = document.querySelector('.close-btn');
-
-    // Open modal when image is clicked
-    gallery.addEventListener('click', (e) => {
-    const wrapper = e.target.closest('.image-wrapper');
-    if (wrapper) {
-        const img = wrapper.querySelector('img');
-        if (img) {
-        modal.classList.add('modal--active');
-        modalImg.src = img.src;
-        }
-    }
-    });
-
-    // Close modal logic
-    function closeModal() {
-    modal.classList.remove('modal--active');
-    }
-
-    closeBtn.addEventListener('click', closeModal);
-    modal.addEventListener('click', (e) => {
-    if (e.target === modal) {
-        closeModal();
-    }
-    });
-
-    window.lucide.createIcons();
+  window.lucide.createIcons();
 });

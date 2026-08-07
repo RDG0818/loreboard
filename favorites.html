@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Favorites</title>
+  <title>My Saves</title>
   <link rel="stylesheet" href="src/style.css" />
   <script src="https://unpkg.com/lucide@latest"></script>
 </head>
@@ -11,43 +11,21 @@
   <div class="page">
     <aside class="sidebar">
       <ul>
-        <li>
-          <a href="index.html" class="nav-link" id="nav-home">
-            <i data-lucide="home"></i>
-          </a>
-        </li>
-        <li>
-          <a href="favorites.html" class="nav-link active" id="nav-favorites">
-            <i data-lucide="heart"></i>
-          </a>
-        </li>
-        <li>
-          <a href="stats.html" class="nav-link" id="nav-stats">
-            <i data-lucide="bar-chart-2"></i>
-          </a>
-        </li>
-        <li>
-          <a href="music.html" class="nav-link" id="nav-music">
-            <i data-lucide="music"></i>
-          </a>
-        </li>
+        <li><a href="index.html" class="nav-link"><i data-lucide="home"></i></a></li>
+        <li><a href="favorites.html" class="nav-link active"><i data-lucide="heart"></i></a></li>
+        <li><a href="recommendations.html" class="nav-link"><i data-lucide="sparkles"></i></a></li>
       </ul>
     </aside>
 
     <main class="gallery-container">
       <header class="page-header">
-        <h1 class="page-title">Your Favorites</h1>
+        <h1 class="page-title">My Saves</h1>
       </header>
       <div class="favorites-gallery" id="favorites-gallery">
         <div class="grid-sizer"></div>
         <div class="gutter-sizer"></div>
       </div>
     </main>
-  </div>
-
-  <div id="image-modal" class="modal">
-    <span class="close-btn">&times;</span>
-    <img class="modal-content" id="modal-image">
   </div>
 
   <script src="src/favorites.js" type="module"></script>
