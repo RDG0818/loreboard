@@ -14,6 +14,17 @@ document.addEventListener('DOMContentLoaded', async () => {
   let isLoading = false;
   let searchToken = 0;
 
+  let savedCardIds = new Set();
+  try {
+    const savesResponse = await fetch(`${API_BASE}/api/v1/saves`, { credentials: 'include' });
+    if (savesResponse.ok) {
+      const saves = await savesResponse.json();
+      savedCardIds = new Set(saves.map((c) => c.id));
+    }
+  } catch (error) {
+    // Not logged in or backend unreachable — treat as no saves; the feed itself still works.
+  }
+
   async function fetchCardsPage() {
     const params = new URLSearchParams({ limit: '30' });
     if (nextCursor) params.set('cursor', nextCursor);
@@ -126,8 +137,13 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (!wrapper) return;
     const cardId = wrapper.dataset.cardId;
     currentModalCardId = cardId;
-    modalSaveBtn.textContent = 'Save';
-    modalSaveBtn.classList.remove('saved');
+    if (savedCardIds.has(cardId)) {
+      modalSaveBtn.textContent = 'Saved';
+      modalSaveBtn.classList.add('saved');
+    } else {
+      modalSaveBtn.textContent = 'Save';
+      modalSaveBtn.classList.remove('saved');
+    }
     const img = wrapper.querySelector('img');
 
     modal.classList.add('modal--active');
@@ -163,9 +179,18 @@ document.addEventListener('DOMContentLoaded', async () => {
       gallery.innerHTML = '<div class="gutter-sizer"></div>';
       msnry = null;
       if (!query) {
+        // Wait for any in-flight scroll-triggered load to finish, otherwise the
+        // `isLoading` guard in loadMoreCards() drops this call and the gallery
+        // (already wiped above) stays permanently blank.
+        while (isLoading) {
+          await new Promise((resolve) => setTimeout(resolve, 50));
+        }
+        if (thisToken !== searchToken) return; // superseded by a newer search
         nextCursor = null;
         hasMore = true;
-        loadMoreCards();
+        // Re-observe: the trigger is unobserved whenever hasMore goes false.
+        observer.observe(scrollTrigger);
+        loadMoreCards(thisToken);
         return;
       }
 
@@ -258,6 +283,11 @@ document.addEventListener('DOMContentLoaded', async () => {
 
       modalSaveBtn.textContent = isSaved ? 'Save' : 'Saved';
       modalSaveBtn.classList.toggle('saved', !isSaved);
+      if (isSaved) {
+        savedCardIds.delete(currentModalCardId);
+      } else {
+        savedCardIds.add(currentModalCardId);
+      }
     } catch (error) {
       console.error('Failed to update save state:', error);
       const previousText = modalSaveBtn.textContent;
