@@ -1,8 +1,8 @@
-import Packery from 'packery';
 import imagesLoaded from 'imagesloaded';
 import { cardArtUrl, createCardWrapper, createSaveToggler } from './cardRender.js';
 import { initSidebarToggle } from './sidebar.js';
 import { initSignInLink } from './authStatus.js';
+import { apiFetch, fetchSavedCardIds, createMasonry } from './api.js';
 
 const API_BASE = '';
 
@@ -14,27 +14,15 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   let body;
   try {
-    const response = await fetch(`${API_BASE}/api/v1/recommendations`, { credentials: 'include' });
-    if (response.status === 401) {
-      window.location.href = `${API_BASE}/auth/login/google`;
-      return;
-    }
+    const response = await apiFetch(API_BASE, '/api/v1/recommendations', { credentials: 'include' });
+    if (response.status === 401) return;
     body = await response.json();
   } catch (error) {
     messageEl.textContent = 'Could not load recommendations.';
     return;
   }
 
-  let savedCardIds = new Set();
-  try {
-    const savesResponse = await fetch(`${API_BASE}/api/v1/saves`, { credentials: 'include' });
-    if (savesResponse.ok) {
-      const saves = await savesResponse.json();
-      savedCardIds = new Set(saves.map((c) => c.id));
-    }
-  } catch (error) {
-    // Saved-state fetch failing shouldn't block showing recommendations.
-  }
+  const savedCardIds = await fetchSavedCardIds(API_BASE);
   const toggleSave = createSaveToggler(API_BASE, savedCardIds);
 
   if (body.message) {
@@ -47,11 +35,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     return;
   }
 
-  const msnry = new Packery(gallery, {
-    itemSelector: '.image-wrapper',
-    columnWidth: '.image-wrapper',
-    gutter: 15,
-  });
+  const msnry = createMasonry(gallery);
   window.addEventListener('sidebar:layout-change', () => msnry.layout());
 
   for (const card of body.recommendations) {

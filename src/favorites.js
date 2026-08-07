@@ -3,6 +3,7 @@ import imagesLoaded from 'imagesloaded';
 import { cardArtUrl, createCardWrapper } from './cardRender.js';
 import { initSidebarToggle } from './sidebar.js';
 import { initSignInLink } from './authStatus.js';
+import { apiFetch } from './api.js';
 
 const API_BASE = '';
 
@@ -21,11 +22,8 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   let saved;
   try {
-    const response = await fetch(`${API_BASE}/api/v1/saves`, { credentials: 'include' });
-    if (response.status === 401) {
-      window.location.href = `${API_BASE}/auth/login/google`;
-      return;
-    }
+    const response = await apiFetch(API_BASE, '/api/v1/saves', { credentials: 'include' });
+    if (response.status === 401) return;
     saved = await response.json();
   } catch (error) {
     gallery.innerHTML = `<p class="error-message">Could not load your saves.</p>`;
@@ -45,15 +43,12 @@ document.addEventListener('DOMContentLoaded', async () => {
     removeBtn.addEventListener('click', async (e) => {
       e.stopPropagation();
       try {
-        const response = await fetch(`${API_BASE}/api/v1/saves/${card.id}`, {
+        const response = await apiFetch(API_BASE, `/api/v1/saves/${card.id}`, {
           method: 'DELETE',
           credentials: 'include',
         });
 
-        if (response.status === 401) {
-          window.location.href = `${API_BASE}/auth/login/google`;
-          return;
-        }
+        if (response.status === 401) return;
 
         if (!response.ok) {
           console.error('Failed to remove save:', response.status);

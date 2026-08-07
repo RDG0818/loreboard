@@ -1,8 +1,8 @@
-import Packery from 'packery';
 import imagesLoaded from 'imagesloaded';
 import { cardArtUrl, createCardWrapper, createSaveToggler } from './cardRender.js';
 import { initSidebarToggle } from './sidebar.js';
 import { initSignInLink } from './authStatus.js';
+import { fetchSavedCardIds, createMasonry } from './api.js';
 
 const API_BASE = '';
 // Blocked until the recommendation system exists: wide spans need to know
@@ -30,16 +30,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   // just needs an opaque `seed`, so that swap won't touch this file.
   const feedSeed = Math.random().toString(36).slice(2);
 
-  let savedCardIds = new Set();
-  try {
-    const savesResponse = await fetch(`${API_BASE}/api/v1/saves`, { credentials: 'include' });
-    if (savesResponse.ok) {
-      const saves = await savesResponse.json();
-      savedCardIds = new Set(saves.map((c) => c.id));
-    }
-  } catch (error) {
-    // Not logged in or backend unreachable — treat as no saves; the feed itself still works.
-  }
+  const savedCardIds = await fetchSavedCardIds(API_BASE);
   const toggleSave = createSaveToggler(API_BASE, savedCardIds);
   const cardsById = new Map();
 
@@ -77,11 +68,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     nextCursor = page[page.length - 1].id;
 
     if (!msnry) {
-      msnry = new Packery(gallery, {
-        itemSelector: '.image-wrapper',
-        columnWidth: '.image-wrapper',
-        gutter: 15,
-      });
+      msnry = createMasonry(gallery);
     }
 
     for (const card of page) {
@@ -253,11 +240,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         });
         const results = await response.json();
         if (thisToken !== searchToken) return; // superseded by a newer search
-        msnry = new Packery(gallery, {
-          itemSelector: '.image-wrapper',
-          columnWidth: '.image-wrapper',
-          gutter: 15,
-        });
+        msnry = createMasonry(gallery);
         const wrappers = [];
         for (const card of results) {
           const artUrl = cardArtUrl(card);

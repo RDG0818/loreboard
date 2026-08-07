@@ -1,3 +1,5 @@
+import { apiFetch } from './api.js';
+
 export function cardArtUrl(card) {
   return card.image_uris && card.image_uris.art_crop;
 }
@@ -56,18 +58,15 @@ function setSaveBtnState(btn, isSaved) {
 export function createSaveToggler(apiBase, savedCardIds) {
   return async function toggleSave(cardId, shouldSave) {
     const method = shouldSave ? 'POST' : 'DELETE';
-    const url = shouldSave ? `${apiBase}/api/v1/saves` : `${apiBase}/api/v1/saves/${cardId}`;
-    const response = await fetch(url, {
+    const path = shouldSave ? '/api/v1/saves' : `/api/v1/saves/${cardId}`;
+    const response = await apiFetch(apiBase, path, {
       method,
       credentials: 'include',
       headers: { 'Content-Type': 'application/json' },
       body: shouldSave ? JSON.stringify({ card_id: cardId }) : undefined,
     });
 
-    if (response.status === 401) {
-      window.location.href = `${apiBase}/auth/login/google`;
-      return false;
-    }
+    if (response.status === 401) return false;
     if (!response.ok) return false;
 
     if (shouldSave) savedCardIds.add(cardId);
