@@ -1,41 +1,23 @@
 # Loreboard
 
-Loreboard is a full-stack web app that automates the acquisition, analysis, and vectorization of fantasy art for a cross-modal recommendation system and image property visualization. The project's architecture is designed to be modular and scalable, showcasing best practices in data engineering, backend development, and AI model integration.
+Loreboard is a Magic: The Gathering card discovery app — a Pinterest-style browsing feed for card art, backed by a content-based recommendation system and natural-language search, built on Scryfall's public card database.
 
 ## Core Features/Technical Stack
 
-- **Automated Data Pipeline**: A multi-stage process that scrapes and classifies image data from DeviantArt and ArtStation using the Contrastive Language-Image Pretraining (CLIP) model from [OpenAI](https://github.com/openai/CLIP).
+- **Scryfall Bulk Ingestion**: A scheduled pipeline downloads Scryfall's card database (unique artwork) and syncs it into Postgres, with text embeddings generated via the Gemini API for every card.
 
-- **LLM Metadata Generation**: Utilizes the Gemini API (`gemini-1.5-flash`) to generate captions, titles, tags, and analytical scores for all visual content, stored in a SQLite database.
+- **Masonry Card Browsing**: An infinite-scroll, art-focused feed (no login required to browse, per Scryfall's Fan Content Policy) built with vanilla JS and Masonry.
 
-- **Cross-Modal Vector Search**: Leverages a ChromaDB vector database to recommend music based on the semantic meaning of visual art embeddings.
+- **Google OAuth Accounts**: Sign in to save cards and build a personalized recommendation profile.
 
-- **Backend**: Uses FastAPI with RESTful API endpoints to serve the frontend and provide static file access to the image and audio datasets.
+- **Content-Based Recommendations**: A user's saved cards are averaged into a taste vector and matched against all card embeddings via pgvector nearest-neighbor search.
 
-- **Frontend**: A Javascript UI featuring an infinite-scroll gallery, a favorites system, and a `Chart.js` dashboard for visualizing the metadata of a user's collection.
+- **Natural-Language Search**: An LLM translates free-text requests ("low cost commanders that draw cards") into structured card search queries.
 
-## Future Developmenet
+- **Backend**: FastAPI, Postgres + pgvector.
 
-**Phase 1: Apache Infrastructure and MLOps**
+## Future Development
 
-- **Pipeline Orchestration:** Refactor the data pipeline scripts into a DAG managed by Apache Airflow, enabling scheduled runs, automated retries, and robust monitoring.
-
-- **Event-Driven Architecture:** Implement Apache Kafka to transition from batch processing to a real-time system where new content is process via a producer/consumer model.
-
-- **Containerization:** Containerize all services using Docker and manage the environment with Docker Compose for deployment and scalability.
-
-**Phase 2: Finetuning and Model Specialization**
-
-- **Custom Classifier:** Finetune the CLIP model on a domain-specific dataset to improve the accuracy of the art classification and curation stage.
-
-- **Specialized LLM:** Finetune Llama 3 8B on caption data to create a stylistically consistent model for metadata generation.
-
-- **Custom Embedding Model:** Finetune a bi-modal embedding model using contrastive learning to optimize the vector space for the specific task of matching visual art with music, thereby increasing recommendation relevance.
-
-**Phase 3: Advanced Generative Features**
-
-- **Generative Storytelling** Implement a feature where the system arranges a user-selected set of images into a narrative arc.
-
-    - An LLM will determine the story sequence and generate transition text.
-    - A finetuned diffusion model will generate visual transitions between the images.
-    - The system will dynamically edit and blend the associated audio tracks to create a continuous, cinematic soundtrack for the generated story.
+- Collaborative filtering, once real usage data accumulates (view events are already logged for this).
+- Native/PWA mobile client.
+- Passive view-weighted signal in the recommender, alongside explicit saves.
