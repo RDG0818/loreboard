@@ -2,6 +2,9 @@ import gzip
 import json
 
 import requests
+from dotenv import load_dotenv
+
+load_dotenv()
 
 from backend.pipeline import cards
 from backend.pipeline import db
