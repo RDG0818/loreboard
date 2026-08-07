@@ -1,6 +1,6 @@
 from unittest.mock import MagicMock
-from backend.pipeline import run
-from backend.pipeline.rate_limit import DailyQuotaExceeded
+from backend.ingest import run
+from backend.ingest.rate_limit import DailyQuotaExceeded
 
 
 def test_find_bulk_download_uri_returns_matching_entry():

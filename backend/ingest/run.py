@@ -8,9 +8,9 @@ load_dotenv()
 
 from backend.db import cards
 from backend.db import connection as db
-from backend.pipeline.config import load_config
-from backend.pipeline.embed import build_embedder
-from backend.pipeline.rate_limit import DailyQuota, DailyQuotaExceeded, RateLimiter
+from backend.ingest.config import load_config
+from backend.ingest.embed import build_embedder
+from backend.ingest.rate_limit import DailyQuota, DailyQuotaExceeded, RateLimiter
 
 BULK_DATA_URL = "https://api.scryfall.com/bulk-data"
 HEADERS = {"User-Agent": "loreboard-mtg-pipeline/1.0", "Accept": "application/json"}

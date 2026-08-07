@@ -2,9 +2,9 @@ from unittest.mock import MagicMock, patch
 import pytest
 from google.genai import errors as genai_errors
 
-from backend.pipeline.config import PipelineConfig
-from backend.pipeline.embed import Embedder, build_embedder
-from backend.pipeline.rate_limit import RateLimiter, DailyQuota, DailyQuotaExceeded
+from backend.ingest.config import PipelineConfig
+from backend.ingest.embed import Embedder, build_embedder
+from backend.ingest.rate_limit import RateLimiter, DailyQuota, DailyQuotaExceeded
 
 
 def _no_op_limiter():
@@ -86,7 +86,7 @@ def test_build_embedder_uses_externally_supplied_rate_limiter_and_quota(monkeypa
     shared_limiter = RateLimiter(calls_per_minute=6000, sleep=lambda s: None)
     shared_quota = DailyQuota(max_calls_per_day=10)
 
-    with patch("backend.pipeline.embed.genai"):
+    with patch("backend.ingest.embed.genai"):
         embedder = build_embedder(_config(), shared_limiter, shared_quota)
 
     assert embedder._rate_limiter is shared_limiter
@@ -96,7 +96,7 @@ def test_build_embedder_uses_externally_supplied_rate_limiter_and_quota(monkeypa
 def test_build_embedder_builds_own_rate_limiter_and_quota_when_not_supplied(monkeypatch):
     monkeypatch.setenv("GOOGLE_API_KEY", "fake-key")
 
-    with patch("backend.pipeline.embed.genai"):
+    with patch("backend.ingest.embed.genai"):
         embedder = build_embedder(_config())
 
     assert isinstance(embedder._rate_limiter, RateLimiter)

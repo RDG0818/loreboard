@@ -1,5 +1,5 @@
 import pytest
-from backend.pipeline.rate_limit import RateLimiter, DailyQuota, DailyQuotaExceeded, with_backoff
+from backend.ingest.rate_limit import RateLimiter, DailyQuota, DailyQuotaExceeded, with_backoff
 
 
 def test_rate_limiter_sleeps_remaining_interval():

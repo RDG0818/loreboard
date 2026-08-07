@@ -3,9 +3,9 @@ import os
 from google import genai
 from google.genai import types
 
-from backend.pipeline.config import PipelineConfig
-from backend.pipeline.gemini_retry import is_transient_gemini_error
-from backend.pipeline.rate_limit import DailyQuota, RateLimiter, with_backoff
+from backend.ingest.config import PipelineConfig
+from backend.ingest.gemini_retry import is_transient_gemini_error
+from backend.ingest.rate_limit import DailyQuota, RateLimiter, with_backoff
 
 EMBEDDING_MODEL = "gemini-embedding-001"
 # Matches the pgvector column's fixed vector(768) dimension (db.py). The

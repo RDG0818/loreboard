@@ -1,4 +1,4 @@
-from backend.pipeline.config import load_config, PipelineConfig
+from backend.ingest.config import load_config, PipelineConfig
 
 
 def test_load_config_returns_defaults():
