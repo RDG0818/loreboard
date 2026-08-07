@@ -116,6 +116,26 @@ body {
   animation: pulse 0.15s ease-out;
 }
 
+#modal-save-btn {
+  background-color: #e60023;
+  color: white;
+  border: none;
+  border-radius: 22px;
+  padding: 10px 18px;
+  font-size: 0.95rem;
+  font-weight: bold;
+  cursor: pointer;
+}
+
+#modal-save-btn:hover {
+  background-color: #cc001f;
+}
+
+#modal-save-btn.saved,
+#modal-save-btn.saved:hover {
+  background-color: #4caf50;
+}
+
 .gallery-container {
   flex: 1;
   padding: 20px;

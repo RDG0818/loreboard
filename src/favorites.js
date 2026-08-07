@@ -45,9 +45,27 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     removeBtn.addEventListener('click', async (e) => {
       e.stopPropagation();
-      await fetch(`${API_BASE}/api/v1/saves/${card.id}`, { method: 'DELETE', credentials: 'include' });
-      msnry.remove(wrapper);
-      msnry.layout();
+      try {
+        const response = await fetch(`${API_BASE}/api/v1/saves/${card.id}`, {
+          method: 'DELETE',
+          credentials: 'include',
+        });
+
+        if (response.status === 401) {
+          window.location.href = `${API_BASE}/auth/login/google`;
+          return;
+        }
+
+        if (!response.ok) {
+          console.error('Failed to remove save:', response.status);
+          return;
+        }
+
+        msnry.remove(wrapper);
+        msnry.layout();
+      } catch (error) {
+        console.error('Failed to remove save:', error);
+      }
     });
 
     wrapper.appendChild(img);

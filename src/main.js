@@ -153,19 +153,38 @@ document.addEventListener('DOMContentLoaded', async () => {
       ? `${API_BASE}/api/v1/saves/${currentModalCardId}`
       : `${API_BASE}/api/v1/saves`;
 
-    const response = await fetch(url, {
-      method,
-      credentials: 'include',
-      headers: { 'Content-Type': 'application/json' },
-      body: isSaved ? undefined : JSON.stringify({ card_id: currentModalCardId }),
-    });
+    try {
+      const response = await fetch(url, {
+        method,
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: isSaved ? undefined : JSON.stringify({ card_id: currentModalCardId }),
+      });
 
-    if (response.status === 401) {
-      window.location.href = `${API_BASE}/auth/login/google`;
-      return;
+      if (response.status === 401) {
+        window.location.href = `${API_BASE}/auth/login/google`;
+        return;
+      }
+
+      if (!response.ok) {
+        console.error('Failed to update save state:', response.status);
+        const previousText = modalSaveBtn.textContent;
+        modalSaveBtn.textContent = 'Error';
+        setTimeout(() => {
+          modalSaveBtn.textContent = previousText;
+        }, 1500);
+        return;
+      }
+
+      modalSaveBtn.textContent = isSaved ? 'Save' : 'Saved';
+      modalSaveBtn.classList.toggle('saved', !isSaved);
+    } catch (error) {
+      console.error('Failed to update save state:', error);
+      const previousText = modalSaveBtn.textContent;
+      modalSaveBtn.textContent = 'Error';
+      setTimeout(() => {
+        modalSaveBtn.textContent = previousText;
+      }, 1500);
     }
-
-    modalSaveBtn.textContent = isSaved ? 'Save' : 'Saved';
-    modalSaveBtn.classList.toggle('saved', !isSaved);
   });
 });
