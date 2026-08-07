@@ -18,6 +18,7 @@ body {
   font-family: sans-serif;
   margin: 0;
   background: #000000;
+  color: #eee;
 }
 
 .grid-item {
@@ -134,6 +135,50 @@ body {
 #modal-save-btn.saved,
 #modal-save-btn.saved:hover {
   background-color: #4caf50;
+}
+
+#modal-details {
+  color: #eee;
+}
+
+#modal-name {
+  color: white;
+}
+
+#modal-mana-cost,
+#modal-type-line,
+#modal-oracle-text {
+  color: #eee;
+}
+
+#modal-artist {
+  color: #aaa;
+  font-size: 0.9rem;
+}
+
+.artist-label {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  max-width: 100%;
+  padding: 4px 8px;
+  background: rgba(0, 0, 0, 0.6);
+  color: #eee;
+  font-size: 0.75rem;
+  border-radius: 0 8px 0 12px;
+  z-index: 6;
+  pointer-events: none;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.error-message {
+  color: #ff8a8a;
+}
+
+#recommendations-message {
+  color: #eee;
 }
 
 .gallery-container {
