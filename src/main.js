@@ -1,7 +1,7 @@
 import Masonry from 'masonry-layout';
 import imagesLoaded from 'imagesloaded';
 
-const API_BASE = 'http://127.0.0.1:8000';
+const API_BASE = '';
 
 document.addEventListener('DOMContentLoaded', async () => {
   const gallery = document.querySelector('.gallery');
