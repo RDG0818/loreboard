@@ -4,6 +4,18 @@ Deferred upgrade paths — simple version shipped now, here's the next lever
 if it stops being enough. Not urgent, not scoped, just don't want to
 forget the idea. Newest first.
 
+## Replatform: Supabase / Vercel
+
+Current stack (self-hosted Postgres + pgvector, FastAPI on its own host,
+static Vite frontend) is a placeholder — user intends to eventually move
+onto Supabase (Postgres+pgvector already supported natively) and Vercel
+(frontend hosting, possibly API too via serverless functions). Not
+scoped, not started; flagged during the 2026-08 codebase cleanup sweep so
+it isn't lost. Log any other placeholder-feeling infra choices spotted
+during that sweep here too (e.g. `SESSION_SECRET_KEY`/`FRONTEND_ORIGIN`
+env defaults, connection-per-request instead of pooling) rather than
+fixing them inline.
+
 ## Gemini translation cache: in-process dict → DB-backed / shared cache
 
 Current (`backend/nl_search.py`, `_translation_cache`) is a plain

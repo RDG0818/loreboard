@@ -69,6 +69,62 @@ Items:
 Depends on: none. Small cross-cutting sweep (backend: ordering/flag column; frontend: masonry sizing) — worth doing as one sweep since it's small, not two.
 Parallel-safe with: backend search-quality sweep and all frontend sweeps (touches `fetch_cards_page`/`cards` schema + masonry CSS/JS, disjoint from the others).
 
+### Sweep: codebase cleanup (found during architecture review, not from inbox)
+Status: not started — brainstormed 2026-08-07, design approved, plan not yet written
+Motivation: general reorg/dedup/comment-cleanup pass ahead of a system
+design diagram the user plans to do once this settles — the goal is a
+directory layout and module boundaries clean enough to map straight onto
+that diagram.
+Items:
+- [be] `backend/pipeline/` currently mixes two unrelated things: a DB-access
+  layer (`db.py`, `cards.py`, `interactions.py`, `users.py` — used by both
+  the live API and the ingest script) and an ingest-only pipeline
+  (`run.py`, `embed.py`, `config.py`, `rate_limit.py`, `gemini_retry.py` —
+  only ever invoked by the nightly cron). Split into `backend/db/`
+  (rename `pipeline/db.py` → `db/connection.py`, move `cards.py`/
+  `interactions.py`/`users.py` in unchanged) and `backend/ingest/` (the
+  5 pipeline-only files, unchanged). Touches ~20 files' imports, every
+  test file, and `.github/workflows/data_pipeline.yml`
+  (`python -m backend.pipeline.run` → `backend.ingest.run`). Do this move
+  first, as its own checkpoint (grep for stale `backend.pipeline`
+  references + full `pytest` pass), before any of the items below.
+- [be] Split `backend/auth.py` into `backend/routers/auth_router.py`
+  (login/callback/me endpoints) and `backend/services/auth.py`
+  (`get_current_user`/`require_user`). Move `nl_search.py`,
+  `query_parser.py`, `recommendations.py` into `backend/services/`. Move
+  the 5 `*_router.py` files into `backend/routers/`. Not started.
+- [be] `conn = get_connection(); try: ...; finally: conn.close()` is
+  duplicated identically in 8 places across the routers + `auth.py`.
+  Replace with a FastAPI `Depends`-generator (`backend/db/connection.py::
+  get_db()`, yield conn / close on request end) — pure dedup, same
+  one-connection-per-request behavior, no perf change. Do this after the
+  directory move lands, not combined with it. Not started.
+- [fe] Three duplicated patterns across `main.js`/`favorites.js`/
+  `recommendations.js`: fetch-savedCardIds-into-a-Set boilerplate (main.js,
+  recommendations.js), Packery init options object (main.js x2,
+  recommendations.js), and the 401→redirect-to-login check (favorites.js,
+  recommendations.js, `createSaveToggler` in `cardRender.js`). Extract into
+  a new `src/api.js` (`apiFetch`, `fetchSavedCardIds`, `createMasonry`) —
+  no directory restructuring, just 3 new small functions. `cardRender.js`/
+  `sidebar.js`/`authStatus.js` already single-purpose, not touched. Not
+  started.
+- [ge] Docs pass once the backend move lands: fix any stale `pipeline`
+  references in `README.md`/comments/docstrings. Flag (don't fix) any
+  other placeholder-feeling infra choices spotted along the way (e.g.
+  `SESSION_SECRET_KEY`/`FRONTEND_ORIGIN` env defaults, connection-per-
+  request instead of pooling) into `FUTURE_IMPROVEMENTS.md` — the
+  Supabase/Vercel replatform intent is already logged there. Not started.
+- Explicitly out of scope for this sweep: DB connection pooling (behavior
+  change, deferred), Supabase/Vercel migration (deferred, logged in
+  `FUTURE_IMPROVEMENTS.md`), touching the flagged-off wide-tile code in
+  `cardRender.js` (deliberately deferred, see that file's Done entry above
+  and `FUTURE_IMPROVEMENTS.md`).
+Depends on: none.
+Parallel-safe with: nothing else queued right now — this sweep touches
+nearly every backend file's import lines, so land it before starting any
+other backend sweep (e.g. the still-open NL structured-output item in
+"backend search quality" above) to avoid merge pain.
+
 ## Later (real scope, not "polish" — separate future specs, not sweeps yet)
 
 - `[ge]` multiple boards, Pinterest-style (own board per theme/deck) — new feature
