@@ -79,7 +79,6 @@ def run() -> None:
     cfg = load_config()
     conn = db.get_connection()
     try:
-        db.init_schema(conn)
         ingested = ingest_cards(conn)
         print(f"Ingested/updated {ingested} cards.")
         embedded = backfill_embeddings(conn, cfg)

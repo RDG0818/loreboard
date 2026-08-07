@@ -16,6 +16,15 @@ Loreboard is a Magic: The Gathering card discovery app — a Pinterest-style bro
 
 - **Backend**: FastAPI, Postgres + pgvector.
 
+## Database Migrations
+
+Schema changes are managed with [Alembic](https://alembic.sqlalchemy.org/) (`backend/db/migrations/`). `DATABASE_URL` is read the same way the app reads it (env var) — no separate credential in `alembic.ini`.
+
+- Apply all pending migrations: `alembic upgrade head`
+- Create a new migration: `alembic revision -m "describe the change"`, then hand-write the SQL in the generated file's `upgrade()`/`downgrade()`.
+
+Fresh local setup requires running `alembic upgrade head` once before first use — the app and ingest pipeline no longer apply schema automatically.
+
 ## Future Development
 
 - Collaborative filtering, once real usage data accumulates. The `views` table and the `POST /api/v1/views` endpoint exist and are tested, but the frontend does not call the endpoint yet, so no view events are being recorded — wiring that up is a prerequisite.

@@ -2,18 +2,6 @@ from unittest.mock import MagicMock, patch
 from backend.db import connection as db
 
 
-def test_init_schema_creates_expected_tables():
-    conn = MagicMock()
-    cursor = conn.cursor.return_value.__enter__.return_value
-
-    db.init_schema(conn)
-
-    executed_sql = cursor.execute.call_args[0][0]
-    for table in ("cards", "users", "saves", "views"):
-        assert f"CREATE TABLE IF NOT EXISTS {table}" in executed_sql
-    conn.commit.assert_called_once()
-
-
 def test_get_connection_creates_extension_before_registering_vector(monkeypatch):
     """On a completely fresh database the `vector` type doesn't exist yet.
     register_vector() looks up that type's OID, so it must not run until
