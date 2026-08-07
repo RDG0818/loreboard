@@ -13,6 +13,7 @@ branch_labels = None
 depends_on = None
 
 SCHEMA_SQL = """
+CREATE EXTENSION IF NOT EXISTS vector;
 CREATE EXTENSION IF NOT EXISTS pg_trgm;
 
 CREATE TABLE IF NOT EXISTS cards (
