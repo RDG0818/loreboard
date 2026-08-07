@@ -70,7 +70,7 @@ Depends on: none. Small cross-cutting sweep (backend: ordering/flag column; fron
 Parallel-safe with: backend search-quality sweep and all frontend sweeps (touches `fetch_cards_page`/`cards` schema + masonry CSS/JS, disjoint from the others).
 
 ### Sweep: codebase cleanup (found during architecture review, not from inbox)
-Status: not started — brainstormed 2026-08-07, design approved, plan not yet written
+Status: done
 Motivation: general reorg/dedup/comment-cleanup pass ahead of a system
 design diagram the user plans to do once this settles — the goal is a
 directory layout and module boundaries clean enough to map straight onto
@@ -119,6 +119,9 @@ Items:
   `FUTURE_IMPROVEMENTS.md`), touching the flagged-off wide-tile code in
   `cardRender.js` (deliberately deferred, see that file's Done entry above
   and `FUTURE_IMPROVEMENTS.md`).
+
+Landed via `docs/superpowers/plans/2026-08-07-codebase-cleanup-implementation.md` across 5 commits (backend/pipeline → backend/db + backend/ingest, backend/{routers,services} split, Depends-based connection dedup, src/api.js frontend dedup). `pytest backend/` 85 passed, `npx vite build` clean throughout. No live-browser pass done (no browser automation tool in this environment, per this doc's established note) — frontend changes are refactor-only (no DOM/behavior change), but worth a manual eyeball per the project's usual caution with `[fe]` work. Note: during Task 4's review, the uniform application of `Depends(get_db)` to all 10 endpoints meant that 2 endpoints (cards_router.search_cards, search_router.natural_search) now open DB connections before input validation runs (previously validation ran first); this tradeoff was flagged, presented to the human partner, and accepted as a deliberate cost to keep all endpoints uniform on the `Depends(get_db)` pattern.
+
 Depends on: none.
 Parallel-safe with: nothing else queued right now — this sweep touches
 nearly every backend file's import lines, so land it before starting any
