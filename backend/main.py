@@ -15,7 +15,7 @@ from backend.routers.saves_router import router as saves_router
 from backend.routers.search_router import router as search_router
 from backend.routers.views_router import router as views_router
 
-FRONTEND_ORIGIN = os.environ.get("FRONTEND_ORIGIN", "http://localhost:5173")
+FRONTEND_ORIGIN = os.environ["FRONTEND_ORIGIN"]
 
 app = FastAPI()
 

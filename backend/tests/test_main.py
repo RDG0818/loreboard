@@ -1,5 +1,21 @@
+import importlib
+import sys
+
+import pytest
+
+
+def test_missing_frontend_origin_raises_keyerror(monkeypatch):
+    monkeypatch.setenv("SESSION_SECRET_KEY", "test-secret")
+    monkeypatch.delenv("FRONTEND_ORIGIN", raising=False)
+    sys.modules.pop("backend.main", None)
+
+    with pytest.raises(KeyError):
+        importlib.import_module("backend.main")
+
+
 def test_app_exposes_expected_routes(monkeypatch):
     monkeypatch.setenv("SESSION_SECRET_KEY", "test-secret")
+    monkeypatch.setenv("FRONTEND_ORIGIN", "http://localhost:5173")
     from backend.main import app
 
     # FastAPI >=0.141 stores included routers as lazy `_IncludedRouter`
