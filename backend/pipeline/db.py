@@ -6,6 +6,8 @@ from pgvector.psycopg2 import register_vector
 CREATE_EXTENSION_SQL = "CREATE EXTENSION IF NOT EXISTS vector;"
 
 SCHEMA_SQL = """
+CREATE EXTENSION IF NOT EXISTS pg_trgm;
+
 CREATE TABLE IF NOT EXISTS cards (
     id TEXT PRIMARY KEY,
     name TEXT NOT NULL,
@@ -30,6 +32,13 @@ ALTER TABLE cards ADD COLUMN IF NOT EXISTS set_type TEXT;
 ALTER TABLE cards ADD COLUMN IF NOT EXISTS is_universes_beyond BOOLEAN NOT NULL DEFAULT FALSE;
 
 CREATE INDEX IF NOT EXISTS cards_embedding_hnsw_idx ON cards USING hnsw (embedding vector_cosine_ops);
+
+-- gin_trgm_ops speeds up the ILIKE '%word%' scans in query_parser.py (name/
+-- oracle_text/type_line lookups) — a plain B-tree can't help a leading-
+-- wildcard match, trigram indexing can.
+CREATE INDEX IF NOT EXISTS cards_name_trgm_idx ON cards USING gin (name gin_trgm_ops);
+CREATE INDEX IF NOT EXISTS cards_oracle_text_trgm_idx ON cards USING gin (oracle_text gin_trgm_ops);
+CREATE INDEX IF NOT EXISTS cards_type_line_trgm_idx ON cards USING gin (type_line gin_trgm_ops);
 
 CREATE TABLE IF NOT EXISTS users (
     id SERIAL PRIMARY KEY,

@@ -30,6 +30,8 @@ grouped — just dump here. Triage periodically into sweeps below.
 
 - [fe] wide-tile spans still gapped after the Packery swap — user confirmed live in browser. Root cause: Packery's bin-packer only sees geometry, not our intent; a 2-col item still forces the shorter column to jump to match, same visual gap, just moved/reshaped rather than eliminated — placement-time knowledge of "will this leave a gap" isn't something we can bolt on from outside the layout engine. Reverted: `ENABLE_WIDE_TILES` flipped back to `false` in `main.js` (the toggle from the original implementation made this a one-line change, code otherwise untouched and left in place). Packery swap itself kept — still the right gapless bin-packer for plain single-column masonry regardless of wide tiles. Blocked until the recommendation system exists: the plan is to only mark a card wide when it's both a strong recommendation match *and* the current column state (known at insert time) proves spanning won't leave a gap — needs real placement-time state, not a pure per-id hash. Revisit then.
 
+- [be] `pg_trgm` GIN indexes on `cards.name`/`oracle_text`/`type_line` — fixes the `ILIKE '%word%'` seq scans in `query_parser.py` (leading wildcard, so a plain B-tree index can't help). Added `CREATE EXTENSION IF NOT EXISTS pg_trgm` + 3 GIN indexes to `db.py`'s `SCHEMA_SQL`, ran against the live DB. Verified via `EXPLAIN`: planner switched from sequential scan to bitmap index scan on `cards_name_trgm_idx`. Write-time cost only (index maintained at ingest, no runtime downside). `pytest backend/` 83 passed. See `TRICKS.md` for the informal writeup.
+
 ## Sweeps
 
 Once the inbox has enough related items, group them into a sweep here.
@@ -47,10 +49,12 @@ Status: done — see Done section above
 Status: done — see Done section above
 
 ### Sweep: backend search quality
-Status: not started
+Status: in progress
 Items:
-- [be] search is slow — investigate: NL path pays a Gemini round-trip every query (no cache), and `search_cards`'s `ILIKE '%word%'` scans have no supporting index (trigram/GIN would help `name`/`oracle_text`, `type_line` filters). Same class of gap now also applies to `fetch_cards_page`'s `md5(id || seed)` order expression (no index, ~90ms/page seq scan at 54k rows) — worth covering together.
-- [be] NL→query-syntax translation just hopes the LLM emits well-formed output, falls back to poor substring search on failure — consider constrained/structured output (function-calling or JSON schema) instead of parsing free text
+- [be] `ILIKE '%word%'` scans had no supporting index — fixed, see Done section below.
+- [be] NL path pays a Gemini round-trip every query (no cache) — not started.
+- [be] `fetch_cards_page`'s `md5(id || seed)` order expression has no index — not a simple index fix (seed differs per page-load, so a normal expression index can't be precomputed against it); needs its own small design pass (bucket-based shuffle or a periodically-materialized order). Not started.
+- [be] NL→query-syntax translation just hopes the LLM emits well-formed output, falls back to poor substring search on failure — consider constrained/structured output (function-calling or JSON schema) instead of parsing free text. Not started.
 Depends on: none
 Parallel-safe with: everything else — backend-only, different files from all `[fe]` sweeps.
 
