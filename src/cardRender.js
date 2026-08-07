@@ -2,6 +2,31 @@ export function cardArtUrl(card) {
   return card.image_uris && card.image_uris.art_crop;
 }
 
+// Scryfall's art_crop bounding box is wrong for a handful of cards (rules
+// text / type-line bar baked into the jpeg) — spotted on Summon: Choco/Mog.
+// top/bottom are fractions of the source image height to keep.
+const ART_CROP_OVERRIDES = {
+  '00546117-018a-4286-bc20-b5446c5be56f': { top: 0.13, bottom: 0.9 }, // Summon: Choco/Mog (FIN)
+  'b95481b1-1780-4cf9-b910-dd0a4461f818': { top: 0, bottom: 0.9 }, // Summon: Choco/Mog (FIN alt art)
+};
+
+function applyArtCropOverride(img, cardId) {
+  const crop = ART_CROP_OVERRIDES[cardId];
+  if (!crop) return;
+  img.addEventListener(
+    'load',
+    () => {
+      const visibleFraction = crop.bottom - crop.top;
+      const croppedFraction = 1 - visibleFraction;
+      const positionY = croppedFraction > 0 ? (crop.top / croppedFraction) * 100 : 50;
+      img.style.aspectRatio = `${img.naturalWidth} / ${img.naturalHeight * visibleFraction}`;
+      img.style.objectFit = 'cover';
+      img.style.objectPosition = `50% ${positionY}%`;
+    },
+    { once: true }
+  );
+}
+
 function setSaveBtnState(btn, isSaved) {
   btn.textContent = isSaved ? 'Saved' : 'Save';
   btn.classList.toggle('saved', isSaved);
@@ -36,6 +61,7 @@ export function createCardWrapper(card, { savedCardIds, onToggleSave } = {}) {
   wrapper.dataset.cardId = card.id;
 
   const img = document.createElement('img');
+  applyArtCropOverride(img, card.id);
   img.src = cardArtUrl(card);
 
   const overlay = document.createElement('div');

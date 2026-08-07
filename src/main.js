@@ -18,6 +18,10 @@ document.addEventListener('DOMContentLoaded', async () => {
   let msnry;
   let isLoading = false;
   let searchToken = 0;
+  // One shuffle per page load — stable while scrolling/clearing search, fresh on reload.
+  // Extension point: this becomes a per-user recommendation ranking later; the feed API
+  // just needs an opaque `seed`, so that swap won't touch this file.
+  const feedSeed = Math.random().toString(36).slice(2);
 
   let savedCardIds = new Set();
   try {
@@ -33,7 +37,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   const cardsById = new Map();
 
   async function fetchCardsPage() {
-    const params = new URLSearchParams({ limit: '30' });
+    const params = new URLSearchParams({ limit: '30', seed: feedSeed });
     if (nextCursor) params.set('cursor', nextCursor);
     try {
       const response = await fetch(`${API_BASE}/api/v1/cards?${params}`);

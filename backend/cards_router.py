@@ -8,10 +8,10 @@ router = APIRouter()
 
 
 @router.get("/api/v1/cards")
-def list_cards(cursor: str | None = None, limit: int = 30):
+def list_cards(cursor: str | None = None, limit: int = 30, seed: str | None = None):
     conn = get_connection()
     try:
-        return cards.fetch_cards_page(conn, cursor, limit)
+        return cards.fetch_cards_page(conn, cursor, limit, seed)
     finally:
         conn.close()
 

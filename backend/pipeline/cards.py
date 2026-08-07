@@ -76,16 +76,53 @@ def get_card_embedding(conn, card_id: str) -> list[float] | None:
         return row[0] if row else None
 
 
-def fetch_cards_page(conn, cursor: str | None, limit: int = 30) -> list[dict]:
-    """Cursor-paginated card feed, ordered by id for stable pagination."""
+def fetch_cards_page(conn, cursor: str | None, limit: int = 30, seed: str | None = None) -> list[dict]:
+    """Cursor-paginated card feed.
+
+    Without a seed, falls back to plain `ORDER BY id` (stable, deterministic —
+    used by callers that don't care about feed order, e.g. tooling/tests).
+
+    With a seed, orders by `md5(id || seed)` instead: a cheap per-request
+    shuffle that's still keyset-paginatable (tie-broken by id so the order is
+    total). The order key is a pure function of (id, seed), so a page's last
+    `id` is enough to resume — the cursor format doesn't change, we just
+    recompute the same hash for the cursor row to build the WHERE clause.
+
+    This is the extension point for feed ranking: swapping `md5(id || seed)`
+    for a recommendation score (or blending the two) only touches the two
+    ORDER BY / WHERE expressions below — the keyset pagination shape and the
+    API contract (cursor = last card's id) stay the same.
+    """
+    params = {"limit": limit, "seed": seed, "cursor": cursor}
+
     with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
-        if cursor:
-            cur.execute(
-                f"SELECT {CARD_LIST_COLUMNS} FROM cards WHERE id > %s ORDER BY id LIMIT %s",
-                (cursor, limit),
-            )
+        if seed is None:
+            # Plain id order — id alone is already a total order, so a simple
+            # `id > cursor` seek (PK index) is enough, same as before this feature.
+            if cursor:
+                cur.execute(
+                    f"SELECT {CARD_LIST_COLUMNS} FROM cards WHERE id > %(cursor)s ORDER BY id LIMIT %(limit)s",
+                    params,
+                )
+            else:
+                cur.execute(
+                    f"SELECT {CARD_LIST_COLUMNS} FROM cards ORDER BY id LIMIT %(limit)s", params
+                )
         else:
-            cur.execute(f"SELECT {CARD_LIST_COLUMNS} FROM cards ORDER BY id LIMIT %s", (limit,))
+            row_key = "md5(id || %(seed)s)"
+            if cursor:
+                cursor_key = "md5(%(cursor)s || %(seed)s)"
+                cur.execute(
+                    f"SELECT {CARD_LIST_COLUMNS} FROM cards "
+                    f"WHERE ({row_key}, id) > ({cursor_key}, %(cursor)s) "
+                    f"ORDER BY {row_key}, id LIMIT %(limit)s",
+                    params,
+                )
+            else:
+                cur.execute(
+                    f"SELECT {CARD_LIST_COLUMNS} FROM cards ORDER BY {row_key}, id LIMIT %(limit)s",
+                    params,
+                )
         return cur.fetchall()
 
 

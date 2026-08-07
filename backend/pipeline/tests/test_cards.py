@@ -84,3 +84,37 @@ def test_nearest_neighbors_excludes_given_card_when_provided():
     cards.nearest_neighbors(conn, [0.1, 0.2], limit=5, exclude_card_id="c1")
     sql = cursor.execute.call_args[0][0]
     assert "id != %s" in sql
+
+
+def test_fetch_cards_page_orders_by_id_without_seed():
+    conn = MagicMock()
+    cursor = conn.cursor.return_value.__enter__.return_value
+    cursor.fetchall.return_value = []
+    cards.fetch_cards_page(conn, cursor=None, limit=30)
+    sql, params = cursor.execute.call_args[0]
+    assert "ORDER BY id LIMIT" in sql
+    assert "md5" not in sql
+    assert params["seed"] is None
+
+
+def test_fetch_cards_page_orders_by_seeded_hash_first_page():
+    conn = MagicMock()
+    cursor = conn.cursor.return_value.__enter__.return_value
+    cursor.fetchall.return_value = []
+    cards.fetch_cards_page(conn, cursor=None, limit=30, seed="abc")
+    sql, params = cursor.execute.call_args[0]
+    assert "ORDER BY md5(id || %(seed)s), id LIMIT" in sql
+    assert "WHERE" not in sql
+    assert params["seed"] == "abc"
+
+
+def test_fetch_cards_page_seeded_continuation_recomputes_hash_for_cursor():
+    conn = MagicMock()
+    cursor = conn.cursor.return_value.__enter__.return_value
+    cursor.fetchall.return_value = []
+    cards.fetch_cards_page(conn, cursor="c1", limit=30, seed="abc")
+    sql, params = cursor.execute.call_args[0]
+    assert "WHERE (md5(id || %(seed)s), id) > (md5(%(cursor)s || %(seed)s), %(cursor)s)" in sql
+    assert "ORDER BY md5(id || %(seed)s), id LIMIT" in sql
+    assert params["cursor"] == "c1"
+    assert params["seed"] == "abc"
