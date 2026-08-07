@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Pinterest Board</title>
+    <title>MTG Discovery</title>
     <link rel="preconnect" href="https://fonts.gstatic.com">
     <link href="https://fonts.googleapis.com/css2?family=Uncial+Antiqua&display=swap" rel="stylesheet">
 
@@ -25,13 +25,8 @@
                 </a>
                 </li>
                 <li>
-                <a href="stats.html" class="nav-link">
-                    <i data-lucide="bar-chart-2"></i>
-                </a>
-                </li>
-                <li>
-                <a href="music.html" class="nav-link">
-                    <i data-lucide="music"></i>
+                <a href="recommendations.html" class="nav-link">
+                    <i data-lucide="sparkles"></i>
                 </a>
                 </li>
             </ul>
@@ -39,7 +34,8 @@
 
         <main class="gallery-container">
             <header class="page-header">
-                <h1 class="page-title">Home Page</h1>
+                <h1 class="page-title">Browse Cards</h1>
+                <input type="text" id="search-input" placeholder="Search or describe what you want..." />
             </header>
             <div class="gallery">
                 <div class="gutter-sizer"></div>
@@ -51,6 +47,14 @@
     <div id="image-modal" class="modal">
         <span class="close-btn">&times;</span>
         <img class="modal-content" id="modal-image">
+        <div id="modal-details">
+            <h2 id="modal-name"></h2>
+            <p id="modal-mana-cost"></p>
+            <p id="modal-type-line"></p>
+            <p id="modal-oracle-text"></p>
+            <p id="modal-artist"></p>
+            <button id="modal-save-btn">Save</button>
+        </div>
     </div>
 
     <script type="module" src="/src/main.js"></script>

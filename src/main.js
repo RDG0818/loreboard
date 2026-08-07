@@ -1,164 +1,142 @@
 import Masonry from 'masonry-layout';
 import imagesLoaded from 'imagesloaded';
 
-function shuffleArray(arr) {
-    for (let i = arr.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [arr[i], arr[j]] = [arr[j], arr[i]];
-    }
-  }
+const API_BASE = 'http://127.0.0.1:8000';
 
 document.addEventListener('DOMContentLoaded', async () => {
   const gallery = document.querySelector('.gallery');
   const scrollTrigger = document.getElementById('scroll-trigger');
 
-  let allImageUrls = [];
-  let currentIndex = 0;
-  const batchSize = 30;
+  let nextCursor = null;
+  let hasMore = true;
   let msnry;
   let isLoading = false;
 
-  async function fetchAllImageUrls() {
+  async function fetchCardsPage() {
+    const params = new URLSearchParams({ limit: '30' });
+    if (nextCursor) params.set('cursor', nextCursor);
     try {
-      const response = await fetch('http://127.0.0.1:8000/api/v1/images');
-      if (!response.ok) {
-        throw new Error('Network response was not ok');
-      }
-      const imageUrls = await response.json();
-      return imageUrls;
+      const response = await fetch(`${API_BASE}/api/v1/cards?${params}`);
+      if (!response.ok) throw new Error('Network response was not ok');
+      return await response.json();
     } catch (error) {
-      console.error("Failed to fetch image list:", error);
-      gallery.innerHTML = `<p class="error-message">Could not load images. Please ensure the backend is running.</p>`;
-      return []; 
+      console.error('Failed to fetch cards:', error);
+      gallery.innerHTML = `<p class="error-message">Could not load cards. Please ensure the backend is running.</p>`;
+      return [];
     }
   }
 
-  async function loadMoreImages() {
-    if (isLoading || currentIndex >= allImageUrls.length) {
-      return;
-    }
+  function cardArtUrl(card) {
+    return card.image_uris && card.image_uris.art_crop;
+  }
+
+  async function loadMoreCards() {
+    if (isLoading || !hasMore) return;
     isLoading = true;
 
-    const nextImageUrls = allImageUrls.slice(currentIndex, currentIndex + batchSize);
+    const page = await fetchCardsPage();
+    if (page.length === 0) {
+      hasMore = false;
+      observer.unobserve(scrollTrigger);
+      isLoading = false;
+      return;
+    }
+    nextCursor = page[page.length - 1].id;
 
     if (!msnry) {
       msnry = new Masonry(gallery, {
         itemSelector: '.image-wrapper',
         columnWidth: '.image-wrapper',
-        gutter: 15
+        gutter: 15,
       });
     }
 
-    for (const imageUrl of nextImageUrls) {
+    for (const card of page) {
+      const artUrl = cardArtUrl(card);
+      if (!artUrl) continue;
+
       const wrapper = document.createElement('div');
       wrapper.classList.add('image-wrapper');
-      
+      wrapper.dataset.cardId = card.id;
+
       const img = document.createElement('img');
-      img.src = imageUrl;
+      img.src = artUrl;
 
       const overlay = document.createElement('div');
       overlay.classList.add('overlay');
 
-      const btn = document.createElement('button');
-      btn.classList.add('save-btn');
-      btn.textContent = 'Save';
-
-      const favorites = JSON.parse(localStorage.getItem('favorites') || '[]');
-      if (favorites.includes(imageUrl)) {
-        btn.textContent = 'Saved';
-        btn.classList.add('saved');
-      }
-
-      btn.addEventListener('click', (e) => {
-        e.stopPropagation();
-        let saved = JSON.parse(localStorage.getItem('favorites') || '[]');
-        if (!saved.includes(img.src)) {
-          saved.push(img.src);
-          
-          btn.textContent = 'Saved';
-          btn.classList.add('saved');
-        }
-        else {
-          saved = saved.filter(s => s !== img.src);
-          btn.textContent = 'Save';
-          btn.classList.remove('saved');
-        }
-        localStorage.setItem('favorites', JSON.stringify(saved));
-
-        btn.classList.add('pulse');
-        btn.addEventListener('animationend', () => {
-          btn.classList.remove('pulse');
-        }, {once: true});
-      });
+      const artistLabel = document.createElement('span');
+      artistLabel.classList.add('artist-label');
+      artistLabel.textContent = card.artist || '';
 
       wrapper.appendChild(img);
       wrapper.appendChild(overlay);
-      wrapper.appendChild(btn);
-
+      wrapper.appendChild(artistLabel);
       gallery.appendChild(wrapper);
-
       msnry.appended(wrapper);
 
-      await new Promise(resolve => {
-        imagesLoaded(wrapper).on('always', resolve);
-      });
+      await new Promise((resolve) => imagesLoaded(wrapper).on('always', resolve));
       msnry.layout();
     }
 
-    currentIndex += batchSize;
     isLoading = false;
-
-    if (currentIndex >= allImageUrls.length) {
-      observer.unobserve(scrollTrigger);
-    }
   }
 
-  // Intialization
-  allImageUrls = await fetchAllImageUrls();
-  if (allImageUrls.length > 0) {
-    shuffleArray(allImageUrls);
+  const observer = new IntersectionObserver(
+    (entries) => {
+      if (entries[0].isIntersecting) loadMoreCards();
+    },
+    { rootMargin: '200px' }
+  );
+  observer.observe(scrollTrigger);
+  loadMoreCards();
 
-    const observer = new IntersectionObserver((entries) => {
-      if (entries[0].isIntersecting) {
-        loadMoreImages();
-      }
-      }, {
-        rootMargin: '200px'
-      });
-
-    observer.observe(scrollTrigger);
-    loadMoreImages();
-
-  }
-
-  
-
-  window.lucide.createIcons()
+  window.lucide.createIcons();
 
   const modal = document.getElementById('image-modal');
   const modalImg = document.getElementById('modal-image');
+  const modalName = document.getElementById('modal-name');
+  const modalManaCost = document.getElementById('modal-mana-cost');
+  const modalTypeLine = document.getElementById('modal-type-line');
+  const modalOracleText = document.getElementById('modal-oracle-text');
+  const modalArtist = document.getElementById('modal-artist');
   const closeBtn = document.querySelector('.close-btn');
 
-  gallery.addEventListener('click', (e) => {
+  gallery.addEventListener('click', async (e) => {
     const wrapper = e.target.closest('.image-wrapper');
-    if (wrapper) {
-      const img = wrapper.querySelector('img');
-      if (img) {
-        modal.classList.add('modal--active'); 
-        modalImg.src = img.src;
+    if (!wrapper) return;
+    const cardId = wrapper.dataset.cardId;
+    const img = wrapper.querySelector('img');
+
+    modal.classList.add('modal--active');
+    modalImg.src = img.src;
+    modalName.textContent = '';
+    modalManaCost.textContent = '';
+    modalTypeLine.textContent = '';
+    modalOracleText.textContent = 'Loading...';
+    modalArtist.textContent = '';
+
+    try {
+      const response = await fetch(`${API_BASE}/api/v1/cards/${cardId}`);
+      const card = await response.json();
+      modalName.textContent = card.name;
+      modalManaCost.textContent = card.mana_cost || '';
+      modalTypeLine.textContent = card.type_line || '';
+      modalOracleText.textContent = card.oracle_text || '';
+      modalArtist.textContent = card.artist ? `Art by ${card.artist}` : '';
+      if (card.image_uris && card.image_uris.normal) {
+        modalImg.src = card.image_uris.normal;
       }
+    } catch (error) {
+      modalOracleText.textContent = 'Could not load card details.';
     }
   });
 
   function closeModal() {
     modal.classList.remove('modal--active');
   }
-
   closeBtn.addEventListener('click', closeModal);
-
   modal.addEventListener('click', (e) => {
-    if (e.target === modal) {
-      closeModal();
-    }
+    if (e.target === modal) closeModal();
   });
 });
