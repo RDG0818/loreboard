@@ -18,6 +18,6 @@ Loreboard is a Magic: The Gathering card discovery app — a Pinterest-style bro
 
 ## Future Development
 
-- Collaborative filtering, once real usage data accumulates (view events are already logged for this).
+- Collaborative filtering, once real usage data accumulates. The `views` table and the `POST /api/v1/views` endpoint exist and are tested, but the frontend does not call the endpoint yet, so no view events are being recorded — wiring that up is a prerequisite.
 - Native/PWA mobile client.
 - Passive view-weighted signal in the recommender, alongside explicit saves.

@@ -21,6 +21,8 @@ CREATE TABLE IF NOT EXISTS cards (
     embedding vector(768)
 );
 
+CREATE INDEX IF NOT EXISTS cards_embedding_hnsw_idx ON cards USING hnsw (embedding vector_cosine_ops);
+
 CREATE TABLE IF NOT EXISTS users (
     id SERIAL PRIMARY KEY,
     google_sub TEXT NOT NULL UNIQUE,
