@@ -23,7 +23,12 @@ document.addEventListener('DOMContentLoaded', async () => {
   if (body.message) {
     messageEl.textContent = body.message;
   }
-  if (!body.recommendations || body.recommendations.length === 0) return;
+  if (!body.recommendations || body.recommendations.length === 0) {
+    if (!messageEl.textContent) {
+      messageEl.textContent = 'No recommendations yet.';
+    }
+    return;
+  }
 
   const msnry = new Masonry(gallery, {
     itemSelector: '.image-wrapper',

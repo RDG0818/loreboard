@@ -139,10 +139,12 @@ document.addEventListener('DOMContentLoaded', async () => {
   });
 
   let searchDebounce;
+  let searchToken = 0;
   searchInput.addEventListener('input', () => {
     clearTimeout(searchDebounce);
     searchDebounce = setTimeout(async () => {
       const query = searchInput.value.trim();
+      const thisToken = ++searchToken;
       gallery.innerHTML = '<div class="gutter-sizer"></div>';
       msnry = null;
       if (!query) {
@@ -160,12 +162,14 @@ document.addEventListener('DOMContentLoaded', async () => {
           body: JSON.stringify({ query }),
         });
         const results = await response.json();
+        if (thisToken !== searchToken) return; // superseded by a newer search
         msnry = new Masonry(gallery, {
           itemSelector: '.image-wrapper',
           columnWidth: '.image-wrapper',
           gutter: 15,
         });
         for (const card of results) {
+          if (thisToken !== searchToken) return; // superseded by a newer search
           const artUrl = card.image_uris && card.image_uris.art_crop;
           if (!artUrl) continue;
           const wrapper = document.createElement('div');
@@ -187,10 +191,12 @@ document.addEventListener('DOMContentLoaded', async () => {
           wrapper.appendChild(artistLabel);
           gallery.appendChild(wrapper);
           await new Promise((resolve) => imagesLoaded(wrapper).on('always', resolve));
+          if (thisToken !== searchToken) return; // superseded by a newer search
           msnry.appended(wrapper);
           msnry.layout();
         }
       } catch (error) {
+        if (thisToken !== searchToken) return; // superseded by a newer search
         gallery.innerHTML = '<p class="error-message">Search failed.</p>';
       }
     }, 400);
