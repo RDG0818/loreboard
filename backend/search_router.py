@@ -2,8 +2,8 @@ from fastapi import APIRouter
 from pydantic import BaseModel
 
 from backend.nl_search import resolve_search_query
-from backend.pipeline import cards
-from backend.pipeline.db import get_connection
+from backend.db import cards
+from backend.db.connection import get_connection
 
 router = APIRouter()
 

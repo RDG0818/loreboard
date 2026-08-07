@@ -1,8 +1,8 @@
 from fastapi import APIRouter, Depends
 
 from backend.auth import require_user
-from backend.pipeline import cards, interactions
-from backend.pipeline.db import get_connection
+from backend.db import cards, interactions
+from backend.db.connection import get_connection
 from backend.recommendations import compute_taste_vector
 
 router = APIRouter()

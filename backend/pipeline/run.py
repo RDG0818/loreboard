@@ -6,8 +6,8 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-from backend.pipeline import cards
-from backend.pipeline import db
+from backend.db import cards
+from backend.db import connection as db
 from backend.pipeline.config import load_config
 from backend.pipeline.embed import build_embedder
 from backend.pipeline.rate_limit import DailyQuota, DailyQuotaExceeded, RateLimiter

@@ -1,5 +1,5 @@
 from unittest.mock import MagicMock, patch
-from backend.pipeline import db
+from backend.db import connection as db
 
 
 def test_init_schema_creates_expected_tables():
@@ -27,8 +27,8 @@ def test_get_connection_creates_extension_before_registering_vector(monkeypatch)
     calls = []
     cursor.execute.side_effect = lambda sql: calls.append(("execute", sql))
 
-    with patch("backend.pipeline.db.psycopg2.connect", return_value=conn) as connect_mock, \
-         patch("backend.pipeline.db.register_vector", side_effect=lambda c: calls.append(("register_vector", c))) as register_mock:
+    with patch("backend.db.connection.psycopg2.connect", return_value=conn) as connect_mock, \
+         patch("backend.db.connection.register_vector", side_effect=lambda c: calls.append(("register_vector", c))) as register_mock:
         result = db.get_connection()
 
     connect_mock.assert_called_once_with("postgresql://fake")

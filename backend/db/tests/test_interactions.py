@@ -1,5 +1,5 @@
 from unittest.mock import MagicMock
-from backend.pipeline import interactions
+from backend.db import interactions
 
 
 def test_add_save_uses_on_conflict_do_nothing():

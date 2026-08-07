@@ -4,8 +4,8 @@ from authlib.integrations.starlette_client import OAuth
 from fastapi import APIRouter, HTTPException, Request
 from starlette.responses import RedirectResponse
 
-from backend.pipeline import users
-from backend.pipeline.db import get_connection
+from backend.db import users
+from backend.db.connection import get_connection
 
 router = APIRouter()
 

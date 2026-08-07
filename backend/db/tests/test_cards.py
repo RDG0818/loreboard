@@ -1,6 +1,6 @@
 from unittest.mock import MagicMock
 import psycopg2.extras
-from backend.pipeline import cards
+from backend.db import cards
 
 
 def test_card_row_from_json_single_faced_card():

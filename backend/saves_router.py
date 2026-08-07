@@ -2,8 +2,8 @@ from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 
 from backend.auth import require_user
-from backend.pipeline import interactions
-from backend.pipeline.db import get_connection
+from backend.db import interactions
+from backend.db.connection import get_connection
 
 router = APIRouter()
 

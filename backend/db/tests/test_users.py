@@ -1,5 +1,5 @@
 from unittest.mock import MagicMock
-from backend.pipeline import users
+from backend.db import users
 
 
 def test_get_or_create_user_returns_existing_row():
