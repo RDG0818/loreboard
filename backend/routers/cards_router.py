@@ -2,7 +2,7 @@ from fastapi import APIRouter, HTTPException, Query
 
 from backend.db import cards
 from backend.db.connection import get_connection
-from backend.query_parser import QueryParseError, parse_query
+from backend.services.query_parser import QueryParseError, parse_query
 
 router = APIRouter()
 

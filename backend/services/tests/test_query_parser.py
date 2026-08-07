@@ -1,4 +1,4 @@
-from backend.query_parser import QueryParseError, parse_query
+from backend.services.query_parser import QueryParseError, parse_query
 
 
 def test_parse_cmc_comparison():

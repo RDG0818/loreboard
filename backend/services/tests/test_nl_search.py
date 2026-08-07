@@ -2,8 +2,8 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from backend import nl_search
-from backend.nl_search import resolve_search_query, translate_natural_language_query
+from backend.services import nl_search
+from backend.services.nl_search import resolve_search_query, translate_natural_language_query
 
 
 @pytest.fixture(autouse=True)

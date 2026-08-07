@@ -1,9 +1,9 @@
 from fastapi import APIRouter, Depends
 
-from backend.auth import require_user
+from backend.services.auth import require_user
 from backend.db import cards, interactions
 from backend.db.connection import get_connection
-from backend.recommendations import compute_taste_vector
+from backend.services.recommendations import compute_taste_vector
 
 router = APIRouter()
 

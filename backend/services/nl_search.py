@@ -2,7 +2,7 @@ import os
 
 from google import genai
 
-from backend.query_parser import QueryParseError, parse_query
+from backend.services.query_parser import QueryParseError, parse_query
 
 GENERATION_MODEL = "gemini-flash-latest"
 

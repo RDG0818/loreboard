@@ -1,7 +1,7 @@
 from fastapi import APIRouter
 from pydantic import BaseModel
 
-from backend.nl_search import resolve_search_query
+from backend.services.nl_search import resolve_search_query
 from backend.db import cards
 from backend.db.connection import get_connection
 

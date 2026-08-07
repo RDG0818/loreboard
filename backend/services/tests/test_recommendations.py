@@ -1,4 +1,4 @@
-from backend.recommendations import compute_taste_vector
+from backend.services.recommendations import compute_taste_vector
 
 
 def test_compute_taste_vector_returns_none_for_empty_list():

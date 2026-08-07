@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 
-from backend.auth import require_user
+from backend.services.auth import require_user
 from backend.db import interactions
 from backend.db.connection import get_connection
 

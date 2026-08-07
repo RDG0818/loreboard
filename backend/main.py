@@ -8,12 +8,12 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.sessions import SessionMiddleware
 
-from backend.auth import router as auth_router
-from backend.cards_router import router as cards_router
-from backend.recommendations_router import router as recommendations_router
-from backend.saves_router import router as saves_router
-from backend.search_router import router as search_router
-from backend.views_router import router as views_router
+from backend.routers.auth_router import router as auth_router
+from backend.routers.cards_router import router as cards_router
+from backend.routers.recommendations_router import router as recommendations_router
+from backend.routers.saves_router import router as saves_router
+from backend.routers.search_router import router as search_router
+from backend.routers.views_router import router as views_router
 
 FRONTEND_ORIGIN = os.environ.get("FRONTEND_ORIGIN", "http://localhost:5173")
 
