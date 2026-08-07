@@ -12,6 +12,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   let hasMore = true;
   let msnry;
   let isLoading = false;
+  let searchToken = 0;
 
   async function fetchCardsPage() {
     const params = new URLSearchParams({ limit: '30' });
@@ -31,11 +32,16 @@ document.addEventListener('DOMContentLoaded', async () => {
     return card.image_uris && card.image_uris.art_crop;
   }
 
-  async function loadMoreCards() {
+  async function loadMoreCards(token = searchToken) {
     if (isLoading || !hasMore) return;
     isLoading = true;
 
     const page = await fetchCardsPage();
+    if (token !== searchToken) {
+      // superseded by a newer search (or another newer loadMoreCards call)
+      isLoading = false;
+      return;
+    }
     if (page.length === 0) {
       hasMore = false;
       observer.unobserve(scrollTrigger);
@@ -53,6 +59,11 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     for (const card of page) {
+      if (token !== searchToken) {
+        // superseded by a newer search (or another newer loadMoreCards call)
+        isLoading = false;
+        return;
+      }
       const artUrl = cardArtUrl(card);
       if (!artUrl) continue;
 
@@ -74,9 +85,14 @@ document.addEventListener('DOMContentLoaded', async () => {
       wrapper.appendChild(overlay);
       wrapper.appendChild(artistLabel);
       gallery.appendChild(wrapper);
-      msnry.appended(wrapper);
 
       await new Promise((resolve) => imagesLoaded(wrapper).on('always', resolve));
+      if (token !== searchToken) {
+        // superseded by a newer search (or another newer loadMoreCards call)
+        isLoading = false;
+        return;
+      }
+      msnry.appended(wrapper);
       msnry.layout();
     }
 
@@ -139,7 +155,6 @@ document.addEventListener('DOMContentLoaded', async () => {
   });
 
   let searchDebounce;
-  let searchToken = 0;
   searchInput.addEventListener('input', () => {
     clearTimeout(searchDebounce);
     searchDebounce = setTimeout(async () => {
