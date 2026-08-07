@@ -32,6 +32,8 @@ grouped — just dump here. Triage periodically into sweeps below.
 
 - [be] `pg_trgm` GIN indexes on `cards.name`/`oracle_text`/`type_line` — fixes the `ILIKE '%word%'` seq scans in `query_parser.py` (leading wildcard, so a plain B-tree index can't help). Added `CREATE EXTENSION IF NOT EXISTS pg_trgm` + 3 GIN indexes to `db.py`'s `SCHEMA_SQL`, ran against the live DB. Verified via `EXPLAIN`: planner switched from sequential scan to bitmap index scan on `cards_name_trgm_idx`. Write-time cost only (index maintained at ingest, no runtime downside). `pytest backend/` 83 passed. See `TRICKS.md` for the informal writeup.
 
+- [be] in-process cache for Gemini NL→query translation (`backend/nl_search.py`) — module-level dict keyed on normalized (trimmed/lowercased) request text; a cache hit skips the Gemini call entirely and goes straight to `parse_query`. Exact-string match only, paraphrases still miss. Resets on process restart, not shared across instances — fine at current scale; upgrade path (DB-backed/shared cache, semantic match via existing `pgvector` embeddings) noted in `FUTURE_IMPROVEMENTS.md`. Two new tests cover cache-hit-skips-model and normalization; `pytest backend/` 85 passed.
+
 ## Sweeps
 
 Once the inbox has enough related items, group them into a sweep here.
@@ -52,7 +54,7 @@ Status: done — see Done section above
 Status: in progress
 Items:
 - [be] `ILIKE '%word%'` scans had no supporting index — fixed, see Done section below.
-- [be] NL path pays a Gemini round-trip every query (no cache) — not started.
+- [be] NL path pays a Gemini round-trip every query (no cache) — fixed, see Done section below.
 - [be] `fetch_cards_page`'s `md5(id || seed)` order expression has no index — not a simple index fix (seed differs per page-load, so a normal expression index can't be precomputed against it); needs its own small design pass (bucket-based shuffle or a periodically-materialized order). Not started.
 - [be] NL→query-syntax translation just hopes the LLM emits well-formed output, falls back to poor substring search on failure — consider constrained/structured output (function-calling or JSON schema) instead of parsing free text. Not started.
 Depends on: none

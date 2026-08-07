@@ -79,6 +79,20 @@ Fantasy, etc). Verified against real API responses via `curl` first. Zero
 maintenance filter, because it rides on classification the data source
 already maintains for its own reasons.
 
+## In-process cache for Gemini NL→query translation
+
+**Problem:** every natural-language search paid a Gemini round-trip, even
+for exact repeat searches (retyping, or different users searching the same
+popular phrase).
+
+**Trick:** the translation step (NL text → structured query grammar) is a
+pure-ish function — same input text, same output, basically every time. So
+`nl_search.py` keeps a module-level dict cache keyed on the normalized
+(trimmed, lowercased) input text; a cache hit skips Gemini entirely and
+goes straight to parsing. Exact-string match only — paraphrases ("cheap
+draw" vs "inexpensive card draw") still miss and re-hit Gemini, but that's
+a fine tradeoff for how cheap this was to add.
+
 ## Masonry gap bug → bin-packing vs. greedy layout
 
 **Problem:** wide (multi-column) tiles in a Pinterest-style masonry grid

@@ -1,5 +1,16 @@
 from unittest.mock import MagicMock
+
+import pytest
+
+from backend import nl_search
 from backend.nl_search import resolve_search_query, translate_natural_language_query
+
+
+@pytest.fixture(autouse=True)
+def clear_translation_cache():
+    nl_search._translation_cache.clear()
+    yield
+    nl_search._translation_cache.clear()
 
 
 def test_translate_natural_language_query_returns_stripped_model_text():
@@ -39,6 +50,27 @@ def test_resolve_search_query_falls_back_when_model_call_raises():
 
     assert sql == "(name ILIKE %s OR oracle_text ILIKE %s)"
     assert params == ["%anything%", "%anything%"]
+
+
+def test_translate_natural_language_query_caches_repeat_requests():
+    model = MagicMock()
+    model.generate_content.return_value.text = "cmc<=3"
+
+    first = translate_natural_language_query("cheap stuff", model=model)
+    second = translate_natural_language_query("cheap stuff", model=model)
+
+    assert first == second == "cmc<=3"
+    model.generate_content.assert_called_once()
+
+
+def test_translate_natural_language_query_cache_is_case_and_whitespace_insensitive():
+    model = MagicMock()
+    model.generate_content.return_value.text = "cmc<=3"
+
+    translate_natural_language_query("Cheap Stuff", model=model)
+    translate_natural_language_query("  cheap stuff  ", model=model)
+
+    model.generate_content.assert_called_once()
 
 
 def test_resolve_search_query_parses_multi_word_bare_name_translation():

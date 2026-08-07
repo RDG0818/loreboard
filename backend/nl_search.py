@@ -41,12 +41,28 @@ class _GenerateContentAdapter:
         return self._client.models.generate_content(model=self._model_name, contents=prompt)
 
 
+# In-process cache: NL text -> translated grammar string. Translation is a
+# pure-ish function of the input text (same phrasing -> same output), so
+# repeat searches (retyping, or different users hitting a popular phrase)
+# skip the Gemini round-trip entirely. Keyed on normalized (trimmed,
+# lowercased) text — exact repeats only, paraphrases still miss. In-process
+# dict means it resets on restart and isn't shared across multiple backend
+# instances; see TRICKS.md for the upgrade path if that starts to matter.
+_translation_cache: dict[str, str] = {}
+
+
 def translate_natural_language_query(text: str, model=None) -> str:
+    cache_key = text.strip().lower()
+    if cache_key in _translation_cache:
+        return _translation_cache[cache_key]
+
     if model is None:
         client = genai.Client(api_key=os.environ["GOOGLE_API_KEY"])
         model = _GenerateContentAdapter(client, GENERATION_MODEL)
     response = model.generate_content(TRANSLATION_PROMPT.format(request=text))
-    return response.text.strip()
+    translated = response.text.strip()
+    _translation_cache[cache_key] = translated
+    return translated
 
 
 def resolve_search_query(text: str, model=None) -> tuple[str, list]:
