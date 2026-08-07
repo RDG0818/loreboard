@@ -8,6 +8,7 @@ from backend.auth import router as auth_router
 from backend.cards_router import router as cards_router
 from backend.recommendations_router import router as recommendations_router
 from backend.saves_router import router as saves_router
+from backend.search_router import router as search_router
 from backend.views_router import router as views_router
 
 app = FastAPI()
@@ -25,4 +26,5 @@ app.include_router(auth_router)
 app.include_router(cards_router)
 app.include_router(recommendations_router)
 app.include_router(saves_router)
+app.include_router(search_router)
 app.include_router(views_router)
