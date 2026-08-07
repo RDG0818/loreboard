@@ -1,13 +1,14 @@
 from unittest.mock import MagicMock
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
+from backend.db.connection import get_db
 from backend.routers.search_router import router
 
 
 def _client(monkeypatch):
     app = FastAPI()
     app.include_router(router)
-    monkeypatch.setattr("backend.routers.search_router.get_connection", lambda: MagicMock())
+    app.dependency_overrides[get_db] = lambda: MagicMock()
     return TestClient(app)
 
 

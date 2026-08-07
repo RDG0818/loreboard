@@ -2,6 +2,7 @@ from unittest.mock import MagicMock
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from starlette.middleware.sessions import SessionMiddleware
+from backend.db.connection import get_db
 from backend.routers.views_router import router
 
 
@@ -17,7 +18,7 @@ def test_log_views_requires_auth():
 def test_log_views_calls_interactions_log_views(monkeypatch):
     app = FastAPI()
     app.include_router(router)
-    monkeypatch.setattr("backend.routers.views_router.get_connection", lambda: MagicMock())
+    app.dependency_overrides[get_db] = lambda: MagicMock()
     from backend.services.auth import require_user
     app.dependency_overrides[require_user] = lambda: {"id": 1}
     client = TestClient(app)

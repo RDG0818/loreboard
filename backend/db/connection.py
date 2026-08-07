@@ -81,3 +81,11 @@ def init_schema(conn) -> None:
     with conn.cursor() as cur:
         cur.execute(SCHEMA_SQL)
     conn.commit()
+
+
+def get_db():
+    conn = get_connection()
+    try:
+        yield conn
+    finally:
+        conn.close()

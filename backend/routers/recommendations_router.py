@@ -1,21 +1,17 @@
 from fastapi import APIRouter, Depends
 
-from backend.services.auth import require_user
 from backend.db import cards, interactions
-from backend.db.connection import get_connection
+from backend.db.connection import get_db
+from backend.services.auth import require_user
 from backend.services.recommendations import compute_taste_vector
 
 router = APIRouter()
 
 
 @router.get("/api/v1/recommendations")
-def get_recommendations(user=Depends(require_user)):
-    conn = get_connection()
-    try:
-        embeddings = interactions.list_saved_card_embeddings(conn, user["id"])
-        taste_vector = compute_taste_vector(embeddings)
-        if taste_vector is None:
-            return {"recommendations": [], "message": "Save some cards to get recommendations."}
-        return {"recommendations": cards.nearest_neighbors(conn, taste_vector, limit=20)}
-    finally:
-        conn.close()
+def get_recommendations(user=Depends(require_user), conn=Depends(get_db)):
+    embeddings = interactions.list_saved_card_embeddings(conn, user["id"])
+    taste_vector = compute_taste_vector(embeddings)
+    if taste_vector is None:
+        return {"recommendations": [], "message": "Save some cards to get recommendations."}
+    return {"recommendations": cards.nearest_neighbors(conn, taste_vector, limit=20)}

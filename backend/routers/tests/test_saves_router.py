@@ -2,15 +2,15 @@ from unittest.mock import MagicMock
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from starlette.middleware.sessions import SessionMiddleware
+from backend.db.connection import get_db
 from backend.routers.saves_router import router
 
 
 def _client(monkeypatch, user=None):
     app = FastAPI()
     app.include_router(router)
-    monkeypatch.setattr("backend.routers.saves_router.get_connection", lambda: MagicMock())
+    app.dependency_overrides[get_db] = lambda: MagicMock()
     if user is not None:
-        app.dependency_overrides = {}
         from backend.services.auth import require_user
         app.dependency_overrides[require_user] = lambda: user
     return TestClient(app)
