@@ -1,4 +1,4 @@
-import Masonry from 'masonry-layout';
+import Packery from 'packery';
 import imagesLoaded from 'imagesloaded';
 import { cardArtUrl, createCardWrapper, createSaveToggler } from './cardRender.js';
 import { initSidebarToggle } from './sidebar.js';
@@ -47,7 +47,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     return;
   }
 
-  const msnry = new Masonry(gallery, {
+  const msnry = new Packery(gallery, {
     itemSelector: '.image-wrapper',
     columnWidth: '.image-wrapper',
     gutter: 15,

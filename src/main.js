@@ -1,10 +1,15 @@
-import Masonry from 'masonry-layout';
+import Packery from 'packery';
 import imagesLoaded from 'imagesloaded';
 import { cardArtUrl, createCardWrapper, createSaveToggler } from './cardRender.js';
 import { initSidebarToggle } from './sidebar.js';
 import { initSignInLink } from './authStatus.js';
 
 const API_BASE = '';
+// Blocked until the recommendation system exists: wide spans need to know
+// column state at insert time to stay gap-free, which only Packery's internal
+// bin-packer sees. See docs/notes/polish-backlog.md for the plan. Flip to true
+// once a gap-safe placement rule (or the rec system) lands.
+const ENABLE_WIDE_TILES = false;
 
 document.addEventListener('DOMContentLoaded', async () => {
   initSidebarToggle();
@@ -12,12 +17,14 @@ document.addEventListener('DOMContentLoaded', async () => {
   const gallery = document.querySelector('.gallery');
   const scrollTrigger = document.getElementById('scroll-trigger');
   const searchInput = document.getElementById('search-input');
+  const showAllToggle = document.getElementById('show-all-toggle');
 
   let nextCursor = null;
   let hasMore = true;
   let msnry;
   let isLoading = false;
   let searchToken = 0;
+  let showAllCards = localStorage.getItem('showAllCards') === 'true';
   // One shuffle per page load — stable while scrolling/clearing search, fresh on reload.
   // Extension point: this becomes a per-user recommendation ranking later; the feed API
   // just needs an opaque `seed`, so that swap won't touch this file.
@@ -39,6 +46,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   async function fetchCardsPage() {
     const params = new URLSearchParams({ limit: '30', seed: feedSeed });
     if (nextCursor) params.set('cursor', nextCursor);
+    if (showAllCards) params.set('show_all', 'true');
     try {
       const response = await fetch(`${API_BASE}/api/v1/cards?${params}`);
       if (!response.ok) throw new Error('Network response was not ok');
@@ -69,7 +77,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     nextCursor = page[page.length - 1].id;
 
     if (!msnry) {
-      msnry = new Masonry(gallery, {
+      msnry = new Packery(gallery, {
         itemSelector: '.image-wrapper',
         columnWidth: '.image-wrapper',
         gutter: 15,
@@ -85,8 +93,14 @@ document.addEventListener('DOMContentLoaded', async () => {
       const artUrl = cardArtUrl(card);
       if (!artUrl) continue;
 
+      // Never let the very first card in the gallery be wide — Packery uses
+      // the first .image-wrapper's width to set its column unit, and a wide
+      // first card would throw off every column-count calc after it. Checked
+      // against the live DOM (not e.g. cardsById) so this stays correct across
+      // feed resets, which wipe the gallery but not the id->card lookup.
+      const enableWideTiles = ENABLE_WIDE_TILES && gallery.querySelector('.image-wrapper') !== null;
       cardsById.set(card.id, card);
-      const wrapper = createCardWrapper(card, { savedCardIds, onToggleSave: toggleSave });
+      const wrapper = createCardWrapper(card, { savedCardIds, onToggleSave: toggleSave, enableWideTiles });
       gallery.appendChild(wrapper);
 
       await new Promise((resolve) => imagesLoaded(wrapper).on('always', resolve));
@@ -110,6 +124,43 @@ document.addEventListener('DOMContentLoaded', async () => {
   );
   observer.observe(scrollTrigger);
   loadMoreCards();
+
+  // Wipes the gallery and restarts the browse feed from page 1 — used both
+  // when search is cleared and when the show-all-cards toggle flips.
+  async function resetAndReloadFeed() {
+    const thisToken = ++searchToken;
+    gallery.innerHTML = '<div class="gutter-sizer"></div>';
+    msnry = null;
+    // Wait for any in-flight scroll-triggered load to finish, otherwise the
+    // `isLoading` guard in loadMoreCards() drops this call and the gallery
+    // (already wiped above) stays permanently blank.
+    while (isLoading) {
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    }
+    if (thisToken !== searchToken) return; // superseded by a newer search/toggle
+    nextCursor = null;
+    hasMore = true;
+    // Re-observe: the trigger is unobserved whenever hasMore goes false.
+    observer.observe(scrollTrigger);
+    loadMoreCards(thisToken);
+  }
+
+  if (showAllToggle) {
+    showAllToggle.classList.toggle('active', showAllCards);
+    showAllToggle.querySelector('i').setAttribute('data-lucide', showAllCards ? 'eye' : 'eye-off');
+
+    showAllToggle.addEventListener('click', () => {
+      showAllCards = !showAllCards;
+      localStorage.setItem('showAllCards', showAllCards);
+      showAllToggle.classList.toggle('active', showAllCards);
+      showAllToggle.querySelector('i').setAttribute('data-lucide', showAllCards ? 'eye' : 'eye-off');
+      window.lucide.createIcons();
+      // Active search results aren't affected by this filter (search is intent-driven);
+      // the browse feed picks up the new setting once the search is cleared.
+      if (searchInput.value.trim()) return;
+      resetAndReloadFeed();
+    });
+  }
 
   // IntersectionObserver samples geometry at throttled checkpoints, so a
   // fast/flung scroll can move scrollTrigger from "below viewport" to
@@ -185,25 +236,14 @@ document.addEventListener('DOMContentLoaded', async () => {
     clearTimeout(searchDebounce);
     searchDebounce = setTimeout(async () => {
       const query = searchInput.value.trim();
-      const thisToken = ++searchToken;
-      gallery.innerHTML = '<div class="gutter-sizer"></div>';
-      msnry = null;
       if (!query) {
-        // Wait for any in-flight scroll-triggered load to finish, otherwise the
-        // `isLoading` guard in loadMoreCards() drops this call and the gallery
-        // (already wiped above) stays permanently blank.
-        while (isLoading) {
-          await new Promise((resolve) => setTimeout(resolve, 50));
-        }
-        if (thisToken !== searchToken) return; // superseded by a newer search
-        nextCursor = null;
-        hasMore = true;
-        // Re-observe: the trigger is unobserved whenever hasMore goes false.
-        observer.observe(scrollTrigger);
-        loadMoreCards(thisToken);
+        await resetAndReloadFeed();
         return;
       }
 
+      const thisToken = ++searchToken;
+      gallery.innerHTML = '<div class="gutter-sizer"></div>';
+      msnry = null;
       hasMore = false; // search results aren't paginated in this phase
       try {
         const response = await fetch(`${API_BASE}/api/v1/search/natural`, {
@@ -213,7 +253,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         });
         const results = await response.json();
         if (thisToken !== searchToken) return; // superseded by a newer search
-        msnry = new Masonry(gallery, {
+        msnry = new Packery(gallery, {
           itemSelector: '.image-wrapper',
           columnWidth: '.image-wrapper',
           gutter: 15,

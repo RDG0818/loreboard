@@ -14,7 +14,8 @@ def _client(monkeypatch):
 def test_list_cards_returns_page(monkeypatch):
     client = _client(monkeypatch)
     monkeypatch.setattr(
-        "backend.cards_router.cards.fetch_cards_page", lambda conn, cursor, limit, seed: [{"id": "c1"}]
+        "backend.cards_router.cards.fetch_cards_page",
+        lambda conn, cursor, limit, seed, include_all=False: [{"id": "c1"}],
     )
 
     response = client.get("/api/v1/cards")

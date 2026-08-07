@@ -18,8 +18,16 @@ CREATE TABLE IF NOT EXISTS cards (
     legalities JSONB,
     artist TEXT,
     image_uris JSONB,
-    embedding vector(768)
+    embedding vector(768),
+    set_type TEXT,
+    is_universes_beyond BOOLEAN NOT NULL DEFAULT FALSE
 );
+
+-- ADD COLUMN IF NOT EXISTS for databases that already had a `cards` table
+-- before these columns existed (CREATE TABLE IF NOT EXISTS above is a no-op
+-- on those, since the table already exists).
+ALTER TABLE cards ADD COLUMN IF NOT EXISTS set_type TEXT;
+ALTER TABLE cards ADD COLUMN IF NOT EXISTS is_universes_beyond BOOLEAN NOT NULL DEFAULT FALSE;
 
 CREATE INDEX IF NOT EXISTS cards_embedding_hnsw_idx ON cards USING hnsw (embedding vector_cosine_ops);
 

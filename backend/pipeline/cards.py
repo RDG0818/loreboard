@@ -1,8 +1,8 @@
 import psycopg2.extras
 
 UPSERT_SQL = """
-INSERT INTO cards (id, name, oracle_text, type_line, mana_cost, cmc, colors, color_identity, legalities, artist, image_uris)
-VALUES (%(id)s, %(name)s, %(oracle_text)s, %(type_line)s, %(mana_cost)s, %(cmc)s, %(colors)s, %(color_identity)s, %(legalities)s, %(artist)s, %(image_uris)s)
+INSERT INTO cards (id, name, oracle_text, type_line, mana_cost, cmc, colors, color_identity, legalities, artist, image_uris, set_type, is_universes_beyond)
+VALUES (%(id)s, %(name)s, %(oracle_text)s, %(type_line)s, %(mana_cost)s, %(cmc)s, %(colors)s, %(color_identity)s, %(legalities)s, %(artist)s, %(image_uris)s, %(set_type)s, %(is_universes_beyond)s)
 ON CONFLICT (id) DO UPDATE SET
     name = EXCLUDED.name,
     oracle_text = EXCLUDED.oracle_text,
@@ -13,7 +13,9 @@ ON CONFLICT (id) DO UPDATE SET
     color_identity = EXCLUDED.color_identity,
     legalities = EXCLUDED.legalities,
     artist = EXCLUDED.artist,
-    image_uris = EXCLUDED.image_uris
+    image_uris = EXCLUDED.image_uris,
+    set_type = EXCLUDED.set_type,
+    is_universes_beyond = EXCLUDED.is_universes_beyond
 """
 
 CARD_LIST_COLUMNS = "id, name, artist, image_uris"
@@ -47,6 +49,8 @@ def card_row_from_json(card: dict) -> dict:
         "legalities": psycopg2.extras.Json(card.get("legalities") or {}),
         "artist": card.get("artist"),
         "image_uris": psycopg2.extras.Json(image_uris) if image_uris else None,
+        "set_type": card.get("set_type"),
+        "is_universes_beyond": "universesbeyond" in (card.get("promo_types") or []),
     }
 
 
@@ -76,11 +80,13 @@ def get_card_embedding(conn, card_id: str) -> list[float] | None:
         return row[0] if row else None
 
 
-def fetch_cards_page(conn, cursor: str | None, limit: int = 30, seed: str | None = None) -> list[dict]:
+def fetch_cards_page(
+    conn, cursor: str | None, limit: int = 30, seed: str | None = None, include_all: bool = False
+) -> list[dict]:
     """Cursor-paginated card feed.
 
-    Without a seed, falls back to plain `ORDER BY id` (stable, deterministic —
-    used by callers that don't care about feed order, e.g. tooling/tests).
+    Without a seed, orders by plain `id` (stable, deterministic — used by
+    callers that don't care about feed order, e.g. tooling/tests).
 
     With a seed, orders by `md5(id || seed)` instead: a cheap per-request
     shuffle that's still keyset-paginatable (tie-broken by id so the order is
@@ -89,40 +95,41 @@ def fetch_cards_page(conn, cursor: str | None, limit: int = 30, seed: str | None
     recompute the same hash for the cursor row to build the WHERE clause.
 
     This is the extension point for feed ranking: swapping `md5(id || seed)`
-    for a recommendation score (or blending the two) only touches the two
-    ORDER BY / WHERE expressions below — the keyset pagination shape and the
-    API contract (cursor = last card's id) stay the same.
+    for a recommendation score (or blending the two) only touches `row_key`
+    below — the keyset pagination shape and the API contract (cursor = last
+    card's id) stay the same.
+
+    Unless include_all is set, hides "off-vibe" cards by default: joke/
+    playtest sets (Scryfall's set_type == 'funny', covers both silver-border
+    Un-sets and official Mystery Booster Playtest cards) and Universes Beyond
+    crossovers (is_universes_beyond, derived from promo_types at ingest time
+    — Marvel, Final Fantasy, LOTR, etc).
     """
+    where_clauses = []
     params = {"limit": limit, "seed": seed, "cursor": cursor}
 
+    if not include_all:
+        where_clauses.append("set_type IS DISTINCT FROM 'funny'")
+        where_clauses.append("NOT is_universes_beyond")
+
+    if seed is None:
+        row_key = "id"
+        if cursor:
+            where_clauses.append("id > %(cursor)s")
+    else:
+        row_key = "md5(id || %(seed)s)"
+        if cursor:
+            cursor_key = "md5(%(cursor)s || %(seed)s)"
+            where_clauses.append(f"({row_key}, id) > ({cursor_key}, %(cursor)s)")
+
+    where_sql = f"WHERE {' AND '.join(where_clauses)}" if where_clauses else ""
+    order_sql = f"ORDER BY {row_key}, id" if seed is not None else f"ORDER BY {row_key}"
+
     with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
-        if seed is None:
-            # Plain id order — id alone is already a total order, so a simple
-            # `id > cursor` seek (PK index) is enough, same as before this feature.
-            if cursor:
-                cur.execute(
-                    f"SELECT {CARD_LIST_COLUMNS} FROM cards WHERE id > %(cursor)s ORDER BY id LIMIT %(limit)s",
-                    params,
-                )
-            else:
-                cur.execute(
-                    f"SELECT {CARD_LIST_COLUMNS} FROM cards ORDER BY id LIMIT %(limit)s", params
-                )
-        else:
-            row_key = "md5(id || %(seed)s)"
-            if cursor:
-                cursor_key = "md5(%(cursor)s || %(seed)s)"
-                cur.execute(
-                    f"SELECT {CARD_LIST_COLUMNS} FROM cards "
-                    f"WHERE ({row_key}, id) > ({cursor_key}, %(cursor)s) "
-                    f"ORDER BY {row_key}, id LIMIT %(limit)s",
-                    params,
-                )
-            else:
-                cur.execute(
-                    f"SELECT {CARD_LIST_COLUMNS} FROM cards ORDER BY {row_key}, id LIMIT %(limit)s",
-                    params,
-                )
+        cur.execute(
+            f"SELECT {CARD_LIST_COLUMNS} FROM cards {where_sql} {order_sql} LIMIT %(limit)s",
+            params,
+        )
         return cur.fetchall()
 
 

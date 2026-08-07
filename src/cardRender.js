@@ -27,6 +27,27 @@ function applyArtCropOverride(img, cardId) {
   );
 }
 
+// Pinterest-style wide tiles to break up masonry uniformity — a card is
+// "wide" if a cheap hash of its id lands on 0 mod WIDE_TILE_FREQUENCY.
+// Deterministic per id (same card is always/never wide, no layout flicker
+// on refetch). Callers opt in via createCardWrapper's enableWideTiles flag,
+// so removing the feature is a one-line change at the call site — nothing
+// here needs to change. Extension point: once recommendation matching
+// exists, swap this hash for "is this card a strong match" instead.
+const WIDE_TILE_FREQUENCY = 8;
+
+function hashString(str) {
+  let hash = 0;
+  for (let i = 0; i < str.length; i++) {
+    hash = (hash * 31 + str.charCodeAt(i)) | 0;
+  }
+  return hash;
+}
+
+export function isWideCard(cardId) {
+  return Math.abs(hashString(cardId)) % WIDE_TILE_FREQUENCY === 0;
+}
+
 function setSaveBtnState(btn, isSaved) {
   btn.textContent = isSaved ? 'Saved' : 'Save';
   btn.classList.toggle('saved', isSaved);
@@ -55,10 +76,11 @@ export function createSaveToggler(apiBase, savedCardIds) {
   };
 }
 
-export function createCardWrapper(card, { savedCardIds, onToggleSave } = {}) {
+export function createCardWrapper(card, { savedCardIds, onToggleSave, enableWideTiles } = {}) {
   const wrapper = document.createElement('div');
   wrapper.classList.add('image-wrapper');
   wrapper.dataset.cardId = card.id;
+  if (enableWideTiles && isWideCard(card.id)) wrapper.classList.add('wide');
 
   const img = document.createElement('img');
   applyArtCropOverride(img, card.id);

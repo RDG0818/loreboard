@@ -21,6 +21,26 @@ def test_card_row_from_json_single_faced_card():
     assert row["id"] == "abc-123"
     assert row["oracle_text"] == "Whenever this creature attacks..."
     assert row["colors"] == ["U"]
+    assert row["is_universes_beyond"] is False
+
+
+def test_card_row_from_json_flags_universes_beyond_from_promo_types():
+    raw = {
+        "id": "spm-1",
+        "name": "Spider-Man Noir",
+        "set_type": "expansion",
+        "promo_types": ["universesbeyond"],
+    }
+    row = cards.card_row_from_json(raw)
+    assert row["set_type"] == "expansion"
+    assert row["is_universes_beyond"] is True
+
+
+def test_card_row_from_json_funny_set_type():
+    raw = {"id": "unh-1", "name": "_____", "set_type": "funny"}
+    row = cards.card_row_from_json(raw)
+    assert row["set_type"] == "funny"
+    assert row["is_universes_beyond"] is False
 
 
 def test_card_row_from_json_double_faced_card_falls_back_to_faces():
@@ -46,6 +66,7 @@ def test_upsert_card_executes_upsert_sql():
         "id": "c1", "name": "N", "oracle_text": None, "type_line": None,
         "mana_cost": None, "cmc": None, "colors": None, "color_identity": None,
         "legalities": psycopg2.extras.Json({}), "artist": None, "image_uris": None,
+        "set_type": None, "is_universes_beyond": False,
     }
     cards.upsert_card(conn, row)
     cursor.execute.assert_called_once()
@@ -90,10 +111,11 @@ def test_fetch_cards_page_orders_by_id_without_seed():
     conn = MagicMock()
     cursor = conn.cursor.return_value.__enter__.return_value
     cursor.fetchall.return_value = []
-    cards.fetch_cards_page(conn, cursor=None, limit=30)
+    cards.fetch_cards_page(conn, cursor=None, limit=30, include_all=True)
     sql, params = cursor.execute.call_args[0]
     assert "ORDER BY id LIMIT" in sql
     assert "md5" not in sql
+    assert "WHERE" not in sql
     assert params["seed"] is None
 
 
@@ -101,7 +123,7 @@ def test_fetch_cards_page_orders_by_seeded_hash_first_page():
     conn = MagicMock()
     cursor = conn.cursor.return_value.__enter__.return_value
     cursor.fetchall.return_value = []
-    cards.fetch_cards_page(conn, cursor=None, limit=30, seed="abc")
+    cards.fetch_cards_page(conn, cursor=None, limit=30, seed="abc", include_all=True)
     sql, params = cursor.execute.call_args[0]
     assert "ORDER BY md5(id || %(seed)s), id LIMIT" in sql
     assert "WHERE" not in sql
@@ -112,9 +134,39 @@ def test_fetch_cards_page_seeded_continuation_recomputes_hash_for_cursor():
     conn = MagicMock()
     cursor = conn.cursor.return_value.__enter__.return_value
     cursor.fetchall.return_value = []
-    cards.fetch_cards_page(conn, cursor="c1", limit=30, seed="abc")
+    cards.fetch_cards_page(conn, cursor="c1", limit=30, seed="abc", include_all=True)
     sql, params = cursor.execute.call_args[0]
     assert "WHERE (md5(id || %(seed)s), id) > (md5(%(cursor)s || %(seed)s), %(cursor)s)" in sql
     assert "ORDER BY md5(id || %(seed)s), id LIMIT" in sql
     assert params["cursor"] == "c1"
     assert params["seed"] == "abc"
+
+
+def test_fetch_cards_page_filters_off_vibe_cards_by_default():
+    conn = MagicMock()
+    cursor = conn.cursor.return_value.__enter__.return_value
+    cursor.fetchall.return_value = []
+    cards.fetch_cards_page(conn, cursor=None, limit=30)
+    sql, _ = cursor.execute.call_args[0]
+    assert "set_type IS DISTINCT FROM 'funny'" in sql
+    assert "NOT is_universes_beyond" in sql
+
+
+def test_fetch_cards_page_include_all_skips_off_vibe_filter():
+    conn = MagicMock()
+    cursor = conn.cursor.return_value.__enter__.return_value
+    cursor.fetchall.return_value = []
+    cards.fetch_cards_page(conn, cursor=None, limit=30, include_all=True)
+    sql, _ = cursor.execute.call_args[0]
+    assert "is_universes_beyond" not in sql
+    assert "WHERE" not in sql
+
+
+def test_fetch_cards_page_combines_filter_with_cursor_condition():
+    conn = MagicMock()
+    cursor = conn.cursor.return_value.__enter__.return_value
+    cursor.fetchall.return_value = []
+    cards.fetch_cards_page(conn, cursor="c1", limit=30)
+    sql, params = cursor.execute.call_args[0]
+    assert "set_type IS DISTINCT FROM 'funny' AND NOT is_universes_beyond AND id > %(cursor)s" in sql
+    assert params["cursor"] == "c1"
