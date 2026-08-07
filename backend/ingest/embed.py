@@ -8,11 +8,12 @@ from backend.ingest.gemini_retry import is_transient_gemini_error
 from backend.ingest.rate_limit import DailyQuota, RateLimiter, with_backoff
 
 EMBEDDING_MODEL = "gemini-embedding-001"
-# Matches the pgvector column's fixed vector(768) dimension (db.py). The
-# model defaults to 3072-d; nearest-neighbor search here uses cosine
-# distance (vector_cosine_ops / `<=>`), which is scale-invariant, so the
-# manual re-normalization Google's docs recommend for non-default
-# dimensions isn't needed for correctness with this operator.
+# Matches the pgvector column's fixed vector(768) dimension
+# (backend/db/connection.py). The model defaults to 3072-d; nearest-neighbor
+# search here uses cosine distance (vector_cosine_ops / `<=>`), which is
+# scale-invariant, so the manual re-normalization Google's docs recommend
+# for non-default dimensions isn't needed for correctness with this
+# operator.
 EMBEDDING_DIMENSIONALITY = 768
 
 

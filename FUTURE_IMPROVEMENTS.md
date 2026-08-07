@@ -18,7 +18,7 @@ fixing them inline.
 
 ## Gemini translation cache: in-process dict → DB-backed / shared cache
 
-Current (`backend/nl_search.py`, `_translation_cache`) is a plain
+Current (`backend/services/nl_search.py`, `_translation_cache`) is a plain
 in-process dict: resets on every restart, and doesn't share hits across
 multiple backend instances if we ever run more than one. Fine for a
 single-instance app; if that changes, upgrade to a small DB table

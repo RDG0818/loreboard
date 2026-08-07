@@ -92,13 +92,13 @@ Items:
   (login/callback/me endpoints) and `backend/services/auth.py`
   (`get_current_user`/`require_user`). Move `nl_search.py`,
   `query_parser.py`, `recommendations.py` into `backend/services/`. Move
-  the 5 `*_router.py` files into `backend/routers/`. Not started.
+  the 5 `*_router.py` files into `backend/routers/`. Not started. — done
 - [be] `conn = get_connection(); try: ...; finally: conn.close()` is
   duplicated identically in 8 places across the routers + `auth.py`.
   Replace with a FastAPI `Depends`-generator (`backend/db/connection.py::
   get_db()`, yield conn / close on request end) — pure dedup, same
   one-connection-per-request behavior, no perf change. Do this after the
-  directory move lands, not combined with it. Not started.
+  directory move lands, not combined with it. Not started. — done
 - [fe] Three duplicated patterns across `main.js`/`favorites.js`/
   `recommendations.js`: fetch-savedCardIds-into-a-Set boilerplate (main.js,
   recommendations.js), Packery init options object (main.js x2,
@@ -107,20 +107,20 @@ Items:
   a new `src/api.js` (`apiFetch`, `fetchSavedCardIds`, `createMasonry`) —
   no directory restructuring, just 3 new small functions. `cardRender.js`/
   `sidebar.js`/`authStatus.js` already single-purpose, not touched. Not
-  started.
+  started. — done
 - [ge] Docs pass once the backend move lands: fix any stale `pipeline`
   references in `README.md`/comments/docstrings. Flag (don't fix) any
   other placeholder-feeling infra choices spotted along the way (e.g.
   `SESSION_SECRET_KEY`/`FRONTEND_ORIGIN` env defaults, connection-per-
   request instead of pooling) into `FUTURE_IMPROVEMENTS.md` — the
-  Supabase/Vercel replatform intent is already logged there. Not started.
+  Supabase/Vercel replatform intent is already logged there. Not started. — done
 - Explicitly out of scope for this sweep: DB connection pooling (behavior
   change, deferred), Supabase/Vercel migration (deferred, logged in
   `FUTURE_IMPROVEMENTS.md`), touching the flagged-off wide-tile code in
   `cardRender.js` (deliberately deferred, see that file's Done entry above
   and `FUTURE_IMPROVEMENTS.md`).
 
-Landed via `docs/superpowers/plans/2026-08-07-codebase-cleanup-implementation.md` across 5 commits (backend/pipeline → backend/db + backend/ingest, backend/{routers,services} split, Depends-based connection dedup, src/api.js frontend dedup). `pytest backend/` 85 passed, `npx vite build` clean throughout. No live-browser pass done (no browser automation tool in this environment, per this doc's established note) — frontend changes are refactor-only (no DOM/behavior change), but worth a manual eyeball per the project's usual caution with `[fe]` work. Note: during Task 4's review, the uniform application of `Depends(get_db)` to all 10 endpoints meant that 2 endpoints (cards_router.search_cards, search_router.natural_search) now open DB connections before input validation runs (previously validation ran first); this tradeoff was flagged, presented to the human partner, and accepted as a deliberate cost to keep all endpoints uniform on the `Depends(get_db)` pattern.
+Landed via `docs/superpowers/plans/2026-08-07-codebase-cleanup-implementation.md` across 7 commits (backend/pipeline → backend/db + backend/ingest, backend/{routers,services} split, Depends-based connection dedup, src/api.js frontend dedup). `pytest backend/` 85 passed, `npx vite build` clean throughout. No live-browser pass done (no browser automation tool in this environment, per this doc's established note) — frontend changes are refactor-only (no DOM/behavior change), but worth a manual eyeball per the project's usual caution with `[fe]` work. Note: during Task 4's review, the uniform application of `Depends(get_db)` to all 10 endpoints meant that 2 endpoints (cards_router.search_cards, search_router.natural_search) now open DB connections before input validation runs (previously validation ran first); this tradeoff was flagged, presented to the human partner, and accepted as a deliberate cost to keep all endpoints uniform on the `Depends(get_db)` pattern.
 
 Depends on: none.
 Parallel-safe with: nothing else queued right now — this sweep touches
