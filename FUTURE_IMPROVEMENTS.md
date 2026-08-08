@@ -18,12 +18,12 @@ list so it isn't re-derived from scratch later.
   artifact yet.
 - **DB connection pooling**: connection-per-request (see below, already
   flagged) won't survive real concurrent load.
-- **DB migrations**: `SCHEMA_SQL` in `backend/db/connection.py` is a single
-  blob, no versioned migration tool (Alembic or similar). Fine solo; risky
-  once schema changes happen more than rarely.
-- **Secrets/config**: `SESSION_SECRET_KEY`/`FRONTEND_ORIGIN` still have
-  env-var defaults (already flagged under Replatform below) — a real gap,
-  not just a placeholder, once anything is internet-facing for real.
+- ~~**DB migrations**: `SCHEMA_SQL` blob, no versioned migration tool~~ —
+  done: Alembic added (`alembic.ini` + `backend/alembic/`), `SCHEMA_SQL`/
+  `init_schema` retired.
+- ~~**Secrets/config**: `SESSION_SECRET_KEY`/`FRONTEND_ORIGIN` env-var
+  defaults~~ — done: both now required (`os.environ[...]`, no default) in
+  `backend/main.py`.
 - **Observability**: no structured logging, no error tracking (Sentry-class
   tool), no metrics (latency/error rate/DB pool saturation/Gemini
   cost+latency), no alerting.
@@ -110,6 +110,28 @@ precompute against. Real fix is architectural: bucket-based shuffle
 of every row) or a periodically-materialized order (recompute a shuffled
 `sort_key` column on a cron instead of per-request). Needs its own short
 design pass before implementing.
+
+## Precomputed image metadata (average color + aspect ratio) at ingest time
+
+Current skeleton placeholders (`cardRender.js::skeletonColor`) use mana
+color as a stand-in for the image's real average color, and a flat guessed
+aspect-ratio (`5/4`, `.image-wrapper--loading` in `style.css`) since we
+don't know each art-crop's real dimensions ahead of time. Two known
+consequences: (1) skeleton color is on-theme but not the actual image
+color, (2) masonry visibly reshuffles cards as each image's real height
+comes in and Packery's greedy bin-packer re-assigns columns based on the
+now-correct heights — the placeholder-uniform first pass didn't know the
+real heights, so column assignment for later-loading cards can flip
+entirely rather than just resizing in place. Real fix for both: read each
+image once at ingest time, store its true average pixel color + aspect
+ratio alongside the card row, and send both to the frontend so the very
+first layout pass already has correct dimensions (no correction, no
+reshuffle) and a real color swatch (no mana-color proxy). Same shape as
+the deprioritized layout-aware modal skeleton — new column(s) + migration
++ full reingest. Deferred until a broader frontend rewrite; noted so the
+mitigations discussed (debounce the per-card relayout calls, tighten the
+placeholder aspect-ratio guess) don't get built as a stopgap in the
+meantime — left as-is on purpose.
 
 ## Wide-tile masonry spans, blocked on real placement-time signal
 

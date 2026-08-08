@@ -17,7 +17,7 @@ def remove_save(conn, user_id: int, card_id: str) -> None:
 def list_saves(conn, user_id: int) -> list[dict]:
     with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
         cur.execute(
-            "SELECT c.id, c.name, c.artist, c.image_uris FROM saves s "
+            "SELECT c.id, c.name, c.artist, c.image_uris, c.colors FROM saves s "
             "JOIN cards c ON c.id = s.card_id WHERE s.user_id = %s ORDER BY s.saved_at DESC",
             (user_id,),
         )

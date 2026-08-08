@@ -18,7 +18,7 @@ ON CONFLICT (id) DO UPDATE SET
     is_universes_beyond = EXCLUDED.is_universes_beyond
 """
 
-CARD_LIST_COLUMNS = "id, name, artist, image_uris"
+CARD_LIST_COLUMNS = "id, name, artist, image_uris, colors"
 
 
 def card_row_from_json(card: dict) -> dict:

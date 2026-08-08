@@ -50,3 +50,9 @@ async def me(request: Request):
     if user is None:
         return {"logged_in": False}
     return {"logged_in": True, "email": user["email"]}
+
+
+@router.post("/auth/logout")
+async def logout(request: Request):
+    request.session.clear()
+    return {"logged_in": False}

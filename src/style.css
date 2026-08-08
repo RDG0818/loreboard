@@ -3,9 +3,134 @@
 }
 
 .page-header {
-  width: 100%;
   text-align: center;
-  margin-bottom: 20px;
+  /* Fixed, not sticky — same reasoning as .sidebar above. left tracks
+     .gallery-container's margin-left (held at its old value during the
+     collapse/expand transition by sidebar.js, then snapped), so it stays
+     aligned with the gallery below it. */
+  position: fixed;
+  top: 0;
+  left: 72px;
+  right: 0;
+  /* Above .save-btn's z-index:10 — .save-btn is later in the DOM, so an
+     equal z-index here would let it win ties and paint over the (also
+     fixed) profile dropdown whenever it overlaps the top row of cards. */
+  z-index: 25;
+  background: #000000;
+  padding: 12px 20px;
+}
+
+body.sidebar-collapsed .page-header {
+  left: 0;
+}
+
+/* .page-header is `position: fixed`, which also makes it the containing
+   block for absolutely-positioned descendants — no extra positioning
+   context needed here. */
+.profile-menu {
+  position: absolute;
+  top: 50%;
+  right: 20px;
+  transform: translateY(-50%);
+}
+
+.profile-avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: none;
+  background-color: #e2711d;
+  color: white;
+  font-size: 0.9rem;
+  font-weight: bold;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.profile-avatar:hover {
+  background-color: #c25e13;
+}
+
+.profile-dropdown {
+  display: none;
+  flex-direction: column;
+  gap: 12px;
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  width: 260px;
+  padding: 16px;
+  background-color: #1a1a1a;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 12px;
+  z-index: 20;
+}
+
+.profile-dropdown.show {
+  display: flex;
+}
+
+.profile-dropdown-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  /* Lets .profile-email shrink below its content width — flex items default
+     to min-width:auto, which would defeat the ellipsis truncation below. */
+  min-width: 0;
+}
+
+.profile-avatar-large {
+  width: 44px;
+  height: 44px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background-color: #e2711d;
+  color: white;
+  font-size: 1.1rem;
+  font-weight: bold;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.profile-email {
+  margin: 0;
+  min-width: 0;
+  flex: 1;
+  color: #eee;
+  font-size: 0.8rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.profile-divider {
+  height: 1px;
+  background-color: rgba(255, 255, 255, 0.12);
+}
+
+.profile-signout {
+  background: none;
+  border: none;
+  /* Negative margin cancels the padding so the text stays flush with
+     .profile-dropdown-row above it, while the hover chip still bleeds out
+     a bit on all sides instead of hugging the text exactly. */
+  padding: 8px;
+  margin: -8px;
+  border-radius: 6px;
+  color: #eee;
+  font-size: 1rem;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+}
+
+.profile-signout:hover {
+  background-color: #3a3a3a;
+  color: white;
 }
 
 #search-input {
@@ -60,9 +185,12 @@ body {
 
 .sidebar-toggle {
   position: fixed;
-  top: 18px;
+  top: 10px;
   left: 60px;
-  z-index: 20;
+  /* Above .page-header (z-index: 25) — the toggle sits inside the header's
+     fixed top strip, so it'd otherwise be painted over by the header's
+     opaque background. */
+  z-index: 30;
   width: 28px;
   height: 28px;
   display: flex;
@@ -101,6 +229,15 @@ body.sidebar-collapsed .sidebar-toggle {
   border-radius: 12px;
 }
 
+/* Suppresses Packery's per-item reposition transition for exactly one
+   relayout (the sidebar-toggle relayout, see sidebar.js) so the anchor
+   card's post-layout position can be read synchronously instead of racing
+   an in-flight CSS transition. `!important` is required to beat Packery's
+   own inline transition-duration style on each item. */
+body.layout-instant .image-wrapper {
+  transition: none !important;
+}
+
 /* Pinterest-style wide tile — spans 2 columns instead of 1 to break up
    masonry uniformity. See ENABLE_WIDE_TILES in main.js to turn this off. */
 .image-wrapper.wide {
@@ -108,10 +245,24 @@ body.sidebar-collapsed .sidebar-toggle {
 }
 
 .image-wrapper img {
-  display: block; 
+  display: block;
   width: 100%;
-  border-radius: 12px; 
-  transition: transform 0.2s ease;
+  border-radius: 12px;
+  opacity: 1;
+  transition: transform 0.2s ease, opacity 0.15s ease;
+}
+
+/* Skeleton placeholder while the real thumbnail loads — a flat mana-color
+   swatch (see skeletonColor() in cardRender.js) at a generic placeholder
+   aspect-ratio, close enough to a typical art-crop's proportions that the
+   snap to the real image once loaded isn't jarring. Dropped once the <img>
+   fires load/error. */
+.image-wrapper--loading {
+  aspect-ratio: 5 / 4;
+}
+
+.image-wrapper--loading img {
+  opacity: 0;
 }
 
 .image-wrapper:hover img {
@@ -238,8 +389,18 @@ body.sidebar-collapsed .sidebar-toggle {
 
 .gallery-container {
   flex: 1;
-  padding: 20px;
-  margin: 0 auto;
+  /* Extra top clearance for the now-fixed .page-header (see below) so it
+     doesn't sit on top of the first row of cards. */
+  padding: 90px 20px 20px;
+  /* Room for the fixed .sidebar, which no longer takes up flex space of
+     its own. Held at its old value during the collapse/expand transition
+     by sidebar.js (JS-driven, not a CSS transition — see there for why),
+     then snapped to the new value below in one frame. */
+  margin-left: 72px;
+}
+
+body.sidebar-collapsed .gallery-container {
+  margin-left: 0;
 }
 
 .sidebar {
@@ -248,13 +409,19 @@ body.sidebar-collapsed .sidebar-toggle {
   border-right: 1px solid rgba(255, 255, 255, 0.08);
   color: white;
   height: 100vh;
-  position: sticky;
+  /* Fixed, not sticky: a sticky element can only stick within its
+     containing block, so once you scroll near the bottom of a long
+     infinite-scroll feed (or the empty "stretch" region while the next
+     page is still loading) it runs out of room and scrolls away with the
+     rest of the page. Fixed keeps it pinned regardless of scroll position. */
+  position: fixed;
   top: 0;
+  left: 0;
+  z-index: 15;
   display: flex;
   flex-direction: column;
   align-items: center;
-  padding-top: 20px;
-  flex: none;
+  padding-top: 36px;
   overflow: hidden;
   transition: width 0.2s ease, padding 0.2s ease;
 }
@@ -402,6 +569,23 @@ button.nav-link {
   max-width: 85vw;
   max-height: 75vh;
   border-radius: 8px;
+}
+
+/* Skeleton placeholder while the full card image loads: the art-crop
+   thumbnail (already cached, loads instantly) stretched to a standard
+   Magic card's aspect ratio (63:88) and blurred, standing in for a real
+   blurhash without needing a precomputed hash or a decode library. */
+.modal-content.modal-content--loading {
+  width: clamp(240px, 30vw, 400px);
+  aspect-ratio: 63 / 88;
+  object-fit: cover;
+  filter: blur(20px) saturate(1.2);
+  animation: modal-image-pulse 1.4s ease-in-out infinite;
+}
+
+@keyframes modal-image-pulse {
+  0%, 100% { opacity: 0.6; }
+  50% { opacity: 1; }
 }
 
 .close-btn {

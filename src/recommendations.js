@@ -38,15 +38,22 @@ document.addEventListener('DOMContentLoaded', async () => {
   const msnry = createMasonry(gallery);
   window.addEventListener('sidebar:layout-change', () => msnry.layout());
 
+  const wrappers = [];
   for (const card of body.recommendations) {
     const artUrl = cardArtUrl(card);
     if (!artUrl) continue;
     const wrapper = createCardWrapper(card, { savedCardIds, onToggleSave: toggleSave });
     gallery.appendChild(wrapper);
-    await new Promise((resolve) => imagesLoaded(wrapper).on('always', resolve));
-    msnry.appended(wrapper);
-    msnry.layout();
+    wrappers.push(wrapper);
+
+    // Skeleton placeholder (cardRender.js/style.css) already sizes the
+    // wrapper correctly, so cards don't need to wait on their own network
+    // image before appearing — only the snap to the real image needs a
+    // relayout once it's loaded.
+    imagesLoaded(wrapper).on('always', () => msnry.layout());
   }
+  msnry.appended(wrappers);
+  msnry.layout();
 
   window.lucide.createIcons();
 });

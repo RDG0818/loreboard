@@ -50,6 +50,33 @@ export function isWideCard(cardId) {
   return Math.abs(hashString(cardId)) % WIDE_TILE_FREQUENCY === 0;
 }
 
+// Skeleton placeholder color while the real thumbnail loads — not a true
+// average-pixel-color (that'd need a precomputed value per card, stored at
+// ingest time; a bigger sweep, same shape as the deprioritized layout-aware
+// modal skeleton). Mana color is already stored and free to send down, and
+// gets close to the same "on-theme, snappy" Pinterest feel. Tuned for
+// contrast against the page's black background, not lifted straight from
+// official mana-symbol colors (real black-mana brown would be invisible).
+const COLOR_SWATCHES = {
+  W: '#f8f4e3',
+  U: '#1e6ea8',
+  B: '#4a4a4a',
+  R: '#c9392f',
+  G: '#1f7a4d',
+};
+const COLORLESS_SWATCH = '#585858';
+// TODO: composite multicolor cards from their component colors (e.g. a
+// gradient) instead of one flat gold swatch — flagged by the user as a
+// later refinement, not needed for v1.
+const MULTICOLOR_SWATCH = '#c9a227';
+
+function skeletonColor(card) {
+  const colors = card.colors || [];
+  if (colors.length === 0) return COLORLESS_SWATCH;
+  if (colors.length > 1) return MULTICOLOR_SWATCH;
+  return COLOR_SWATCHES[colors[0]] || COLORLESS_SWATCH;
+}
+
 function setSaveBtnState(btn, isSaved) {
   btn.textContent = isSaved ? 'Saved' : 'Save';
   btn.classList.toggle('saved', isSaved);
@@ -77,13 +104,23 @@ export function createSaveToggler(apiBase, savedCardIds) {
 
 export function createCardWrapper(card, { savedCardIds, onToggleSave, enableWideTiles } = {}) {
   const wrapper = document.createElement('div');
-  wrapper.classList.add('image-wrapper');
+  wrapper.classList.add('image-wrapper', 'image-wrapper--loading');
   wrapper.dataset.cardId = card.id;
+  wrapper.style.backgroundColor = skeletonColor(card);
   if (enableWideTiles && isWideCard(card.id)) wrapper.classList.add('wide');
 
   const img = document.createElement('img');
   applyArtCropOverride(img, card.id);
   img.src = cardArtUrl(card);
+  // The skeleton box (see .image-wrapper--loading, style.css) has a fixed
+  // placeholder aspect-ratio so Packery/Masonry can lay it out correctly
+  // the instant it's appended, without waiting on the real image's
+  // dimensions. Once the image loads (or fails to — don't get stuck on the
+  // skeleton forever), drop the placeholder and let the real image size
+  // the wrapper.
+  const clearLoadingState = () => wrapper.classList.remove('image-wrapper--loading');
+  img.addEventListener('load', clearLoadingState, { once: true });
+  img.addEventListener('error', clearLoadingState, { once: true });
 
   const overlay = document.createElement('div');
   overlay.classList.add('overlay');

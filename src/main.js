@@ -2,6 +2,7 @@ import imagesLoaded from 'imagesloaded';
 import { cardArtUrl, createCardWrapper, createSaveToggler } from './cardRender.js';
 import { initSidebarToggle } from './sidebar.js';
 import { initSignInLink } from './authStatus.js';
+import { initModal } from './modal.js';
 import { fetchSavedCardIds, createMasonry } from './api.js';
 
 const API_BASE = '';
@@ -71,6 +72,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       msnry = createMasonry(gallery);
     }
 
+    const wrappers = [];
     for (const card of page) {
       if (token !== searchToken) {
         // superseded by a newer search (or another newer loadMoreCards call)
@@ -89,14 +91,25 @@ document.addEventListener('DOMContentLoaded', async () => {
       cardsById.set(card.id, card);
       const wrapper = createCardWrapper(card, { savedCardIds, onToggleSave: toggleSave, enableWideTiles });
       gallery.appendChild(wrapper);
+      wrappers.push(wrapper);
 
-      await new Promise((resolve) => imagesLoaded(wrapper).on('always', resolve));
-      if (token !== searchToken) {
-        // superseded by a newer search (or another newer loadMoreCards call)
-        isLoading = false;
-        return;
-      }
-      msnry.appended(wrapper);
+      // The skeleton placeholder (cardRender.js/style.css) already gives
+      // Packery a correctly-sized box the instant it's appended, so cards
+      // don't need to wait on their own (uncached) network image before
+      // appearing — only the snap to the real image's size needs a
+      // relayout once it's actually loaded.
+      imagesLoaded(wrapper).on('always', () => {
+        if (token !== searchToken) return;
+        msnry.layout();
+      });
+    }
+
+    if (token !== searchToken) {
+      isLoading = false;
+      return;
+    }
+    if (wrappers.length > 0) {
+      msnry.appended(wrappers);
       msnry.layout();
     }
 
@@ -171,52 +184,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   window.lucide.createIcons();
 
-  const modal = document.getElementById('image-modal');
-  const modalImg = document.getElementById('modal-image');
-  const modalArtist = document.getElementById('modal-artist');
-  const modalSaveBtn = document.getElementById('modal-save-btn');
-  let currentModalCardId = null;
-  const closeBtn = document.querySelector('.close-btn');
-
-  gallery.addEventListener('click', (e) => {
-    const wrapper = e.target.closest('.image-wrapper');
-    if (!wrapper) return;
-    const cardId = wrapper.dataset.cardId;
-    currentModalCardId = cardId;
-    if (savedCardIds.has(cardId)) {
-      modalSaveBtn.textContent = 'Saved';
-      modalSaveBtn.classList.add('saved');
-    } else {
-      modalSaveBtn.textContent = 'Save';
-      modalSaveBtn.classList.remove('saved');
-    }
-
-    // Card list/search responses already carry the full image_uris (incl.
-    // `normal`) and artist — no need to re-fetch.
-    const card = cardsById.get(cardId);
-    const img = wrapper.querySelector('img');
-
-    modal.classList.add('modal--active');
-    modalArtist.textContent = card && card.artist ? `Art by ${card.artist}` : '';
-
-    // `modalImg` is a single reused element, so assigning `.src` directly to
-    // the (likely uncached) full-size image leaves the *previous* card's
-    // bitmap on screen until the new one finishes loading — an <img> doesn't
-    // clear on src reassignment. Show the grid thumbnail first (already
-    // cached from the grid render, so it paints instantly and is always the
-    // right card), then preload the full image and swap only once it's
-    // ready. The cardId guard drops a stale preload if the user has already
-    // clicked a different card before this one finishes loading.
-    modalImg.src = img.src;
-    const normalUrl = card && card.image_uris && card.image_uris.normal;
-    if (normalUrl && normalUrl !== img.src) {
-      const preload = new Image();
-      preload.onload = () => {
-        if (currentModalCardId === cardId) modalImg.src = normalUrl;
-      };
-      preload.src = normalUrl;
-    }
-  });
+  initModal({ gallery, cardsById, savedCardIds, toggleSave });
 
   let searchDebounce;
   searchInput.addEventListener('input', () => {
@@ -249,11 +217,17 @@ document.addEventListener('DOMContentLoaded', async () => {
           const wrapper = createCardWrapper(card, { savedCardIds, onToggleSave: toggleSave });
           gallery.appendChild(wrapper);
           wrappers.push(wrapper);
+
+          // Skeleton placeholder (cardRender.js/style.css) already sizes the
+          // wrapper correctly, so results don't need to wait on every image
+          // in the batch loading before any of them appear — only the snap
+          // to each real image needs its own relayout once it's loaded.
+          imagesLoaded(wrapper).on('always', () => {
+            if (thisToken !== searchToken) return;
+            msnry.layout();
+          });
         }
 
-        // Images load in parallel rather than one-at-a-time — with hundreds of
-        // results a serial await-per-image loop made results trickle in visibly slowly.
-        await new Promise((resolve) => imagesLoaded(gallery).on('always', resolve));
         if (thisToken !== searchToken) return; // superseded by a newer search
         msnry.appended(wrappers);
         msnry.layout();
@@ -262,48 +236,5 @@ document.addEventListener('DOMContentLoaded', async () => {
         gallery.innerHTML = '<p class="error-message">Search failed.</p>';
       }
     }, 400);
-  });
-
-  function closeModal() {
-    modal.classList.remove('modal--active');
-  }
-  closeBtn.addEventListener('click', closeModal);
-  modal.addEventListener('click', (e) => {
-    if (e.target === modal) closeModal();
-  });
-
-  modalSaveBtn.addEventListener('click', async () => {
-    if (!currentModalCardId) return;
-    const isSaved = modalSaveBtn.classList.contains('saved');
-
-    try {
-      const ok = await toggleSave(currentModalCardId, !isSaved);
-      if (!ok) {
-        const previousText = modalSaveBtn.textContent;
-        modalSaveBtn.textContent = 'Error';
-        setTimeout(() => {
-          modalSaveBtn.textContent = previousText;
-        }, 1500);
-        return;
-      }
-
-      modalSaveBtn.textContent = isSaved ? 'Save' : 'Saved';
-      modalSaveBtn.classList.toggle('saved', !isSaved);
-
-      const cardSaveBtn = gallery.querySelector(
-        `.image-wrapper[data-card-id="${currentModalCardId}"] .save-btn`
-      );
-      if (cardSaveBtn) {
-        cardSaveBtn.textContent = isSaved ? 'Save' : 'Saved';
-        cardSaveBtn.classList.toggle('saved', !isSaved);
-      }
-    } catch (error) {
-      console.error('Failed to update save state:', error);
-      const previousText = modalSaveBtn.textContent;
-      modalSaveBtn.textContent = 'Error';
-      setTimeout(() => {
-        modalSaveBtn.textContent = previousText;
-      }, 1500);
-    }
   });
 });
